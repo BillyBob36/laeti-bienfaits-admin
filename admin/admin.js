@@ -236,6 +236,21 @@ function renderField(field, path) {
   } else if (field.type === 'image') {
     wrap.appendChild(renderImage(path, field));
 
+  } else if (field.type === 'toggle') {
+    const sw = document.createElement('label'); sw.className = 'switch';
+    const cb = document.createElement('input'); cb.type = 'checkbox';
+    cb.checked = !!getPath(State.content, path);
+    const sl = document.createElement('span'); sl.className = 'slider';
+    const txt = document.createElement('span'); txt.className = 'switch-txt';
+    txt.textContent = cb.checked ? 'Affiché' : 'Masqué';
+    cb.addEventListener('change', () => {
+      setPath(State.content, path, cb.checked);
+      txt.textContent = cb.checked ? 'Affiché' : 'Masqué';
+      markDirty();
+    });
+    sw.append(cb, sl, txt);
+    wrap.appendChild(sw);
+
   } else if (field.type === 'list') {
     wrap.appendChild(renderList(field, path));
   }
