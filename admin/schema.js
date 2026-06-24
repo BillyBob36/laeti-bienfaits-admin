@@ -37,7 +37,7 @@ window.LB_SCHEMA = [
         { type:'text', key:'when', label:'Date / fréquence', hint:'Ex. Chaque année au 1ᵉʳ mai · Samedi 12 octobre' },
         { type:'text', key:'where', label:'Lieu' },
         { type:'textarea', key:'description', label:'Description', rows:5 },
-        { type:'list', key:'photos', label:'Photos', itemLabel:'Photo', item:'image' },
+        { type:'gallery', key:'photos', label:'Photos', accept:'image/*' },
       ]},
     ],
   },
@@ -52,7 +52,7 @@ window.LB_SCHEMA = [
     id:'galerie', label:'Galerie photos', icon:I.img,
     intro:"Les photos « Au cabinet ». Cliquez sur « Changer » pour remplacer une photo, ＋ pour en ajouter.",
     fields:[
-      { type:'list', key:'galerie.images', label:'Photos', itemLabel:'Photo', item:'image' },
+      { type:'gallery', key:'galerie.images', label:'Photos', accept:'image/*' },
       { type:'group', label:'Vidéo (optionnelle)', fields:[
         { type:'image', key:'galerie.video', label:'Fichier vidéo (MP4)', accept:'video/mp4' },
         { type:'image', key:'galerie.videoPoster', label:'Image d’aperçu de la vidéo' },

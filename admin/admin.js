@@ -236,6 +236,9 @@ function renderField(field, path) {
   } else if (field.type === 'image') {
     wrap.appendChild(renderImage(path, field));
 
+  } else if (field.type === 'gallery') {
+    wrap.appendChild(renderGalleryGrid(field, path));
+
   } else if (field.type === 'toggle') {
     const sw = document.createElement('label'); sw.className = 'switch';
     const cb = document.createElement('input'); cb.type = 'checkbox';
@@ -330,6 +333,52 @@ function renderList(field, path) {
 function mini(label, onClick, cls) {
   const b = document.createElement('button'); b.type = 'button';
   b.className = 'btn-icon' + (cls ? ' ' + cls : ''); b.textContent = label; b.onclick = onClick; return b;
+}
+
+/* ---------- galerie : grille de vignettes (ajout multiple, ✕, réordonner) -- */
+function renderGalleryGrid(field, path) {
+  const box = document.createElement('div');
+  let arr = getPath(State.content, path);
+  if (!Array.isArray(arr)) { arr = []; setPath(State.content, path, arr); }
+  const grid = document.createElement('div'); grid.className = 'gal-grid';
+
+  function move(i, d) {
+    const j = i + d; if (j < 0 || j >= arr.length) return;
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t; markDirty(); redraw();
+  }
+  function draw() {
+    arr.forEach((src, i) => {
+      const item = document.createElement('div'); item.className = 'gal-item';
+      const im = document.createElement('img'); im.src = resolveImg(src); im.alt = 'Photo ' + (i + 1); im.loading = 'lazy';
+      const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'gal-rm'; rm.title = 'Supprimer cette photo'; rm.textContent = '✕';
+      rm.onclick = () => { arr.splice(i, 1); markDirty(); redraw(); };
+      const mv = document.createElement('div'); mv.className = 'gal-mv';
+      const lf = document.createElement('button'); lf.type = 'button'; lf.title = 'Déplacer avant'; lf.textContent = '‹'; lf.onclick = () => move(i, -1);
+      const rt = document.createElement('button'); rt.type = 'button'; rt.title = 'Déplacer après'; rt.textContent = '›'; rt.onclick = () => move(i, 1);
+      mv.append(lf, rt);
+      item.append(im, mv, rm);
+      grid.appendChild(item);
+    });
+    const add = document.createElement('label'); add.className = 'gal-add';
+    add.innerHTML = '<span class="gal-add-plus">＋</span><span>Ajouter une photo</span>';
+    const input = document.createElement('input'); input.type = 'file';
+    input.accept = field.accept || 'image/*'; input.multiple = true; input.style.display = 'none';
+    add.appendChild(input);
+    input.addEventListener('change', async () => {
+      const files = Array.prototype.slice.call(input.files || []); if (!files.length) return;
+      add.classList.add('loading');
+      for (let f = 0; f < files.length; f++) {
+        try { const url = await uploadFile(files[f]); arr.push(url); markDirty(); }
+        catch (e) { toast('⚠ ' + e.message, true); }
+      }
+      add.classList.remove('loading'); input.value = ''; redraw();
+    });
+    grid.appendChild(add);
+  }
+  function redraw() { grid.innerHTML = ''; draw(); }
+  draw();
+  box.appendChild(grid);
+  return box;
 }
 
 /* ---------- enregistrement ---------------------------------------------- */

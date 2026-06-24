@@ -95,6 +95,22 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 .btn-add{align-self:flex-start;background:var(--cream2);border:1px dashed var(--sage-bd);color:var(--green-soft);font-family:inherit;font-weight:600;font-size:14px;padding:11px 18px;border-radius:11px;cursor:pointer;transition:background .14s;}
 .btn-add:hover{background:#e3eedd;}
 
+/* galerie : grille de vignettes */
+.gal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:14px;}
+.gal-item{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#fff;}
+.gal-item img{width:100%;height:100%;object-fit:cover;display:block;}
+.gal-rm{position:absolute;top:8px;right:8px;width:28px;height:28px;background:rgba(20,28,16,.62);color:#fff;border:0;border-radius:50%;cursor:pointer;display:grid;place-items:center;font-size:13px;line-height:1;opacity:0;transition:opacity .15s,background .15s;}
+.gal-item:hover .gal-rm,.gal-item:focus-within .gal-rm{opacity:1;}
+.gal-rm:hover{background:#b0392b;}
+.gal-mv{position:absolute;left:8px;right:8px;bottom:8px;display:flex;justify-content:space-between;opacity:0;transition:opacity .15s;}
+.gal-item:hover .gal-mv,.gal-item:focus-within .gal-mv{opacity:1;}
+.gal-mv button{width:28px;height:28px;border:0;border-radius:50%;background:rgba(20,28,16,.62);color:#fff;cursor:pointer;font-size:18px;line-height:1;display:grid;place-items:center;}
+.gal-mv button:hover{background:var(--green-soft);}
+.gal-add{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:var(--cream2);color:var(--terra-dk);border:2px dashed var(--sage-bd);border-radius:12px;cursor:pointer;text-align:center;font-weight:600;font-size:13px;padding:8px;transition:background .15s;}
+.gal-add:hover{background:#e3eedd;}
+.gal-add.loading{opacity:.6;pointer-events:none;}
+.gal-add-plus{font-size:30px;line-height:1;font-weight:400;}
+
 /* interrupteur (toggle) */
 .switch{display:inline-flex;align-items:center;gap:12px;cursor:pointer;user-select:none;}
 .switch input{position:absolute;opacity:0;width:0;height:0;}
