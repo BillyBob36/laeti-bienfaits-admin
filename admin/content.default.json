@@ -1,0 +1,218 @@
+{
+  "general": {
+    "logo": "img/logo7.png",
+    "brand": "Laëti'Bienfaits",
+    "tagline": "Naturopathie · Kinésiologie",
+    "cta": "Prendre rendez-vous"
+  },
+  "hero": {
+    "slides": [
+      {
+        "image": "img/Slide1.jpg",
+        "eyebrow": "Retrouvez votre équilibre",
+        "title": "Retrouvez votre équilibre naturellement et durablement.",
+        "subtitle": "Et si ces symptômes n'étaient pas vos ennemis, mais des signaux précieux pour retrouver votre équilibre ?"
+      },
+      {
+        "image": "img/Slide2.jpg",
+        "eyebrow": "Naturopathe et Kinésiologue à Ménil-la-Horgne",
+        "title": "Mon approche est globale et personnalisée, pour révéler vos ressources naturelles.",
+        "subtitle": "À 10 minutes de Commercy et Ligny-en-Barrois — Secteur Toul."
+      },
+      {
+        "image": "img/Slide3.jpg",
+        "eyebrow": "Une approche globale",
+        "title": "Votre corps dit toujours la vérité, considérez-le comme votre meilleur allié.",
+        "subtitle": "Consultations à domicile possibles pour les personnes dans l'incapacité de se déplacer."
+      }
+    ]
+  },
+  "citation": {
+    "quote": "Votre corps dit toujours la vérité, considérez-le comme votre meilleur allié."
+  },
+  "pillars": {
+    "items": [
+      { "image": "img/Picto_respect.png", "title": "Une approche naturelle" },
+      { "image": "img/Picto_solution.png", "title": "Un accompagnement personnalisé" },
+      { "image": "img/Picto_ecoute.png", "title": "Une écoute bienveillante et sans jugement" }
+    ]
+  },
+  "about": {
+    "portrait": "img/portrait.jpg",
+    "eyebrow": "Qui suis-je ?",
+    "name": "Laëtitia Ehles",
+    "lead": "Naturopathe référencée à l'OMNES, formée en kinésiologie instinctive.",
+    "bio": [
+      "Si vous me rencontrez un jour, il y a de fortes chances que nous parlions autant de voyages, de nature, de cuisine du monde ou d'animaux que de santé et de bien-être !",
+      "Avant de devenir naturopathe et kinésiologue, j'ai travaillé comme éducatrice nature et environnement. Pendant plusieurs années, j'ai transmis ma passion du vivant à travers des animations, des découvertes de la nature et des moments de partage. Avec le recul, je réalise que ce fil conducteur a toujours été présent dans ma vie : comprendre le vivant, le respecter et transmettre.",
+      "Lorsque vous venez me rencontrer, vous n'avez pas besoin d'être quelqu'un d'autre que vous-même. Vous pouvez arriver avec vos doutes, vos peurs, votre fatigue, vos émotions ou simplement votre envie d'aller mieux. Je vous accueille tel que vous êtes, sans jugement et avec beaucoup de bienveillance.",
+      "Mon cabinet est un lieu où l'on peut parler sérieusement sans se prendre au sérieux, où l'on peut déposer ce qui pèse, comprendre ce qui se joue et repartir avec davantage de clarté, de légèreté et de confiance."
+    ],
+    "badges": [
+      "Plus de 6 ans d'expérience en cabinet",
+      "Référencée OMNES",
+      "Enfants, adolescents et adultes"
+    ]
+  },
+  "pourquoi": {
+    "eyebrow": "Pourquoi consulter ?",
+    "title": "Vous",
+    "titleAccent": "ressentez peut-être",
+    "reasons": [
+      "Une fatigue persistante malgré le repos",
+      "Du stress, de l'anxiété ou une charge mentale importante",
+      "Des troubles digestifs récurrents",
+      "Des douleurs articulaires ou musculaires",
+      "Des difficultés à gérer vos émotions",
+      "Un manque de confiance en vous",
+      "Des troubles du sommeil",
+      "Des blocages émotionnels ou des schémas répétitifs",
+      "Une hypersensibilité difficile à vivre",
+      "Une période de transition de vie (deuil, séparation, burn-out, ménopause...)"
+    ],
+    "closing": "Vous n'avez pas besoin de continuer à porter cela seul(e)."
+  },
+  "approche": {
+    "eyebrow": "Mon approche",
+    "title": "Une vision",
+    "titleAccent": "globale de votre bien-être",
+    "intro": "Je considère l'être humain dans toutes ses dimensions :",
+    "dimensions": [
+      { "image": "img/dim-physique.png", "label": "Physique" },
+      { "image": "img/dim-emotionnelle.png", "label": "Émotionnelle" },
+      { "image": "img/dim-energetique.png", "label": "Énergétique" }
+    ],
+    "text1": "Lors de chaque séance, nous cherchons ensemble à comprendre l'origine des déséquilibres plutôt qu'à masquer les symptômes.",
+    "text2": "Mon objectif est de vous aider à retrouver :",
+    "chips": [
+      "Plus d'énergie", "Plus de sérénité", "Plus de confiance",
+      "Un meilleur sommeil", "Un corps plus détendu", "Une meilleure qualité de vie"
+    ]
+  },
+  "pratiques": {
+    "eyebrow": "Mes pratiques",
+    "title": "Des approches complémentaires",
+    "items": [
+      {
+        "eyebrow": "Pratique 01",
+        "title": "Naturopathie",
+        "body": "<h4>La naturopathie, qu'est-ce que c'est ?</h4><p>C'est une médecine préventive de bon sens qui considère la personne dans sa globalité, en respectant son authenticité. Les séances sont « sur mesure » ! La naturopathie est une médecine non conventionnelle : il n'y a pas de protocole tout établi, mais un ensemble de méthodes (rééquilibrage alimentaire, auriculothérapie, phytothérapie, fleurs de Bach) visant à garder ou retrouver sa santé en respectant sa nature propre.</p><p>C'est aussi apprendre à être acteur et responsable de sa santé, et à prendre soin de soi par des moyens naturels. Le naturopathe cherche « la cause » du dysfonctionnement et s'appuie sur le pouvoir d'auto-guérison du corps afin d'en rétablir l'équilibre et d'estomper les symptômes.</p><h4>Pourquoi consulter ?</h4><p>La naturopathie peut intervenir sur :</p><div class=\"chips\"><span>Fatigue</span><span>Problèmes de peau</span><span>Maux de ventre</span><span>Perte de poids</span><span>Détox</span><span>Stress, anxiété</span><span>Deuil</span><span>Arrêt du tabac</span><span>Maladie auto-immune</span><span>Douleurs</span><span>Cycle hormonal</span></div>"
+      },
+      {
+        "eyebrow": "Pratique 02",
+        "title": "Kinésiologie instinctive",
+        "body": "<h4>La kinésiologie, qu'est-ce que c'est ?</h4><p>Datant du XXᵉ siècle, c'est une discipline née aux États-Unis qui utilise le test musculaire — véritable dialogue avec le corps — pour relancer l'énergie dans l'ensemble du corps. À travers des outils comme le rééquilibrage des méridiens, le Brain Gym, l'EFT, les réflexes archaïques, les blessures de l'âme ou la gestion de l'auto-sabotage, elle permet de lever des blocages émotionnels, d'apaiser rapidement les tensions et de restaurer l'équilibre physique et émotionnel. Résultat souvent ressenti dès la première séance.</p><h4>Pourquoi consulter ?</h4><p>Le corps dit toujours la vérité, considérons-le comme notre allié. Le kinésiologue parle exclusivement à votre corps et non à votre « tête », ce qui permet de soulever la source des blocages et de trouver les solutions pour les corriger.</p><div class=\"chips\"><span>Stress</span><span>Chocs émotionnels</span><span>Confiance en soi</span><span>Angoisses, phobies</span><span>Insomnies, migraines</span><span>Relations, couple, famille</span><span>Hypersensibilité, burn-out</span><span>Difficultés scolaires</span><span>Préparation d'examen</span><span>Addictions</span><span>Schémas répétitifs</span></div><p>La kinésiologie s'adresse à tout le monde et à tous les âges. Les séances s'effectuent allongé ou assis, et entièrement habillé.</p>"
+      },
+      {
+        "eyebrow": "Pratique 03",
+        "title": "Soins corps et âme",
+        "body": "<h4>Massage Signature Laeti'Bienfaits<span class=\"tag\">45 min – 1h · 60 €</span></h4><p>Manipulation intuitive, guidée par le toucher pour libérer les tensions et apaiser durablement les douleurs du dos, des jambes, du nerf sciatique ou des cervicales. J'allie magnétisme, travail sur les méridiens, huiles essentielles et Fleurs de Bach.</p><h4>AromaTouch Technique<span class=\"tag\">45 min · 70 €</span></h4><p>Massage par effleurage doux avec 8 huiles essentielles ciblant les systèmes viscéral, neurologique et endocrinien, pour rétablir l'équilibre physique, mental et émotionnel. Recommandé en cas de fatigue chronique, burn-out, stress, migraines, ou pour renforcer le système immunitaire.</p><h4>Soin au Bol Chantant<span class=\"tag\">1h · 70 €</span></h4><p>Une parenthèse hors du temps, un véritable voyage vibratoire au cœur de vous-même. Les sons profonds et enveloppants des bols chantants se diffusent dans tout le corps, déliant les tensions physiques, apaisant les émotions et calmant le flot des pensées. Idéal en période de stress, de fatigue ou de transition de vie.</p>"
+      },
+      {
+        "eyebrow": "Pratique 04",
+        "title": "Soins détente, thérapeutique",
+        "body": "<h4>Massage Moxibustion<span class=\"tag\">45 min · 60 €</span></h4><p>Inspirée de la médecine traditionnelle chinoise, la moxibustion utilise la chaleur douce de l'armoise séchée (moxa) pour stimuler des points énergétiques. Particulièrement recommandé pour les douleurs musculaires et articulaires, les rhumatismes, les tensions cervicales et lombaires, les douleurs du nerf sciatique, les sensations de froid et la fatigue liée aux tensions chroniques.</p><h4>Réflexologie Plantaire<span class=\"tag\">45 min · 55 €</span></h4><p>Une méthode douce qui stimule les zones réflexes du pied, en lien avec l'ensemble des organes. Appréciée pour soulager les jambes lourdes, stimuler la circulation, réduire la fatigue, favoriser l'élimination des toxines, apaiser le stress et améliorer le sommeil.</p><h4>Massage Californien<span class=\"tag\">1h30 · 90 €</span></h4><p>De longs mouvements fluides, lents et enveloppants qui procurent une profonde sensation de sécurité et de détente. Favorise la détente musculaire, la diminution du stress, une meilleure circulation, le relâchement émotionnel et un sommeil plus réparateur.</p>"
+      }
+    ]
+  },
+  "tarifs": {
+    "eyebrow": "Tarifs",
+    "title": "Mes tarifs",
+    "cards": [
+      {
+        "title": "Tarifs des consultations – chemin vers l'équilibre",
+        "items": [
+          { "name": "Bilan naturopathique", "duration": "", "price": "60 €" },
+          { "name": "Kinésiologie instinctive", "duration": "1h30 – 2h00", "price": "65 €" }
+        ]
+      },
+      {
+        "title": "Tarifs des prestations – soins corps et âme",
+        "items": [
+          { "name": "Massage Signature Laeti'Bienfaits", "duration": "45 min – 1h00", "price": "60 €" },
+          { "name": "Aromatouch Technique", "duration": "45 min", "price": "70 €" },
+          { "name": "Soin au Bol Chantant", "duration": "1h00", "price": "70 €" }
+        ]
+      },
+      {
+        "title": "Tarifs des prestations – soins détente, thérapeutique",
+        "items": [
+          { "name": "Massage Moxibustion", "duration": "45 min", "price": "60 €" },
+          { "name": "Réflexologie Plantaire", "duration": "45 min", "price": "55 €" },
+          { "name": "Massage Californien", "duration": "1h30", "price": "90 €" }
+        ]
+      }
+    ]
+  },
+  "evenements": {
+    "eyebrow": "Evènements et ateliers",
+    "meta": "Chaque année au 1ᵉʳ mai · secteur de Commercy (lieu variable)",
+    "title": "Balade cueillette de plantes médicinales",
+    "description": "Chaque année au 1er mai venir découvrir lors d'une balade cueillette une dizaine de plantes médicinales et comestible. La matinée se termine par un moment de partage gourmand, avec la dégustation de préparations à base de plantes sauvages cueillies ensemble.",
+    "photos": [
+      "img/cueillette-1.jpg",
+      "img/cueillette-2.jpg",
+      "img/cueillette-3.jpg",
+      "img/cueillette-4.jpg"
+    ]
+  },
+  "galerie": {
+    "eyebrow": "Galerie photo",
+    "title": "Au cabinet",
+    "images": [
+      "img/seance-naturo.jpg",
+      "img/seance-kinesio.jpg",
+      "img/test-musculaire.jpg",
+      "img/massage-dos-1.jpg",
+      "img/massage-dos-2.jpg",
+      "img/moxa-1.jpg",
+      "img/moxa-2.jpg",
+      "img/atelier-2022.jpg",
+      "img/atelier-2025.jpg",
+      "img/bol-chantant-1.jpg",
+      "img/bol-chantant-2.jpg",
+      "img/diapason.jpg"
+    ],
+    "video": "img/atelier-diy.mp4",
+    "videoPoster": "img/atelier-diy-poster.jpg"
+  },
+  "temoignages": {
+    "eyebrow": "Témoignages",
+    "title": "Ce qu'ils en disent",
+    "googleLabel": "5,0 · 32 avis Google",
+    "googleUrl": "https://www.google.com/maps?cid=7287759314387895465",
+    "items": [
+      { "name": "Delphine D.", "text": "Je tenais à vous remercier du fond du cœur. Mon fils (9 ans) a déjà fait de très beaux progrès en seulement deux séances, et sa maîtresse l'a elle aussi constaté. Votre accompagnement est précieux et m'a vraiment apporté beaucoup de bien." },
+      { "name": "Marion V.", "text": "Laetitia est une professionnelle exceptionnelle. Avec une écoute attentive et une intuition remarquable, elle met en lumière ce qui freine et aide à le libérer avec douceur et efficacité. Chaque séance est un réel moment de bien-être." },
+      { "name": "Nathalie M.", "text": "Une expérience magique avec le massage au bol sonore ! Dès les premières vibrations, une profonde détente m'a envahie. Un véritable émerveillement qui a réveillé une joie profonde en moi." },
+      { "name": "Anaïs B.", "text": "Je recommande les yeux fermés. Cela fait quelques mois que mon fils et moi y allons et peu à peu les choses se débloquent. Merci pour vos précieux conseils. La sérénité revient peu à peu dans notre corps." },
+      { "name": "Jennifer M.", "text": "Laëtitia vous accueille comme vous êtes et propose des soins adaptés à vos besoins, en prenant en compte votre ressenti. C'est une très belle personne, toujours bienveillante, respectueuse et impliquée." },
+      { "name": "Mélanie L.", "text": "Une personne qui reflète la sérénité et le respect. Elle a su stabiliser mon anxiété et mon mal-être au quotidien, et je me sens beaucoup mieux depuis que je consulte. D'excellents conseils, sans jugement." },
+      { "name": "Sandrine L.", "text": "Quand on rentre dans le cabinet de Laëtitia, on sent déjà que l'on va se détendre. Elle vous accueille avec le sourire et prend le temps d'être à votre écoute. Merci pour le massage Aromatouch en douceur." },
+      { "name": "Erika C.", "text": "Super séance de consultation pour un bilan. Une vraie écoute, des questions qui font réfléchir bien après la consultation. Des conseils et de la bienveillance. Merci 😊" },
+      { "name": "Myriam F.", "text": "Un énorme merci pour ton professionnalisme, tu as le don de mettre tout de suite à l'aise. Merci pour toutes tes astuces et recettes qui motivent et boostent énormément. Je recommande les yeux fermés." },
+      { "name": "Maxime M.", "text": "Superbe expérience, cabinet superbe, soins et massages de qualité. Problème de dos entièrement disparu et détente au maximum ! Je recommande fortement." },
+      { "name": "Christel M.", "text": "Je ne peux que vous conseiller d'aller chez Laëti'Bienfaits. Des moments de détente, de soins, à l'écoute de votre bien-être. Quel que soit votre mal ou votre envie, vous trouverez le soin adapté." },
+      { "name": "Sophie G.", "text": "Merci pour toutes les informations nutritionnelles et votre écoute. Je vais pouvoir rectifier mes erreurs alimentaires et enfin trouver la paix avec moi-même. Je recommande sans modération 👍" },
+      { "name": "Julie M.", "text": "Je suis absolument conquise ! Elle est tout simplement exceptionnelle. Son approche, son écoute et son don pour ce qu'elle fait m'ont profondément marquée. Elle a su cerner mes besoins avec une précision incroyable." }
+    ]
+  },
+  "contact": {
+    "eyebrow": "Contact",
+    "title": "Prenez",
+    "titleAccent": "rendez-vous",
+    "subtitle": "Vous méritez de retrouver un quotidien plus serein, plus léger et plus aligné avec vos besoins. Chaque parcours commence par une première étape.",
+    "address": "37 rue Dom Calmet\n55190 Ménil-la-Horgne",
+    "phone": "06 73 96 21 83",
+    "email": "laetibienfaits@gmail.com",
+    "hours": "Consultations sur rendez-vous du mardi au samedi",
+    "hoursNote": "Consultations à domicile possibles pour les personnes dans l'incapacité de se déplacer · à 10 minutes de Commercy et Ligny-en-Barrois — Secteur Toul",
+    "mapUrl": "https://www.google.com/maps?q=M%C3%A9nil-la-Horgne%2055190&output=embed"
+  },
+  "footer": {
+    "description": "Laëtitia Ehles — naturopathe référencée à l'OMNES, formée en kinésiologie instinctive. Accompagnement des enfants, adolescents et adultes.",
+    "instagram": "https://www.instagram.com/laetibienfaits/",
+    "facebook": "https://www.facebook.com/laetibienfaitsnaturo/?locale=fr_FR",
+    "copyright": "© 2026 Laëti'Bienfaits — Laëtitia Ehles."
+  }
+}
