@@ -50,7 +50,7 @@ window.LB_SCHEMA = [
   },
   {
     id:'galerie', label:'Galerie photos', icon:I.img,
-    intro:"Les photos « Au cabinet ». Cliquez sur « Changer » pour remplacer une photo, ＋ pour en ajouter.",
+    intro:"Les photos « Au cabinet ». Survolez une photo pour la supprimer (✕) ou la déplacer (‹ ›). Cliquez sur « Ajouter une photo » en bas pour en ajouter — vous pouvez en sélectionner plusieurs d'un coup.",
     fields:[
       { type:'gallery', key:'galerie.images', label:'Photos', accept:'image/*' },
       { type:'group', label:'Vidéo (optionnelle)', fields:[
