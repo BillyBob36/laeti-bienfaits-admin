@@ -18,6 +18,7 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
+const google = require('./google');
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -170,11 +171,27 @@ app.post('/api/availability', requireAuth, (req, res) => {
 });
 
 // Créneaux libres (public) : ?duration=minutes
-app.get('/api/slots', (req, res) => {
+app.get('/api/slots', async (req, res) => {
   const av = readJson(AVAIL_FILE, DEFAULT_AVAIL);
   const taken = readJson(BOOK_FILE, []).filter((b) => b.status === 'pending' || b.status === 'confirmed');
   const dur = Math.max(15, parseInt(req.query.duration, 10) || av.defaultDuration || 60);
   const now = parisParts(new Date());
+  // Anti-doublon : plages occupées dans Google Agenda (ramenées en heure locale FR)
+  let busyLocal = [];
+  if (google.enabled()) {
+    try {
+      const fromISO = new Date().toISOString();
+      const toISO = new Date(Date.now() + ((av.horizonDays || 28) + 1) * 86400000).toISOString();
+      const busy = await google.busyRanges(fromISO, toISO);
+      busyLocal = busy.map((r) => { const s = parisParts(new Date(r.start)), e = parisParts(new Date(r.end)); return { sd: s.date, sm: s.minutes, ed: e.date, em: e.minutes }; });
+    } catch (e) { busyLocal = []; }
+  }
+  function busyClash(ds, t, d) {
+    return busyLocal.some((b) => {
+      if (b.sd === ds && b.ed === ds) return overlap(b.sm, b.em, t, t + d);
+      return b.sd <= ds && b.ed >= ds && !(b.ed === ds && b.em <= 0);
+    });
+  }
   const out = [];
   for (let dd = 0; dd <= (av.horizonDays || 28); dd++) {
     const ds = parisParts(new Date(Date.now() + dd * 86400000)).date;
@@ -186,8 +203,9 @@ app.get('/api/slots', (req, res) => {
       const we = hm(w.end);
       for (let t = hm(w.start); t + dur <= we; t += (av.slotInterval || 30)) {
         if (ds === now.date && t < now.minutes + (av.minNoticeHours || 0) * 60) continue;
-        const clash = taken.some((b) => b.date === ds && overlap(hm(b.time), hm(b.time) + (b.durationMin || dur), t, t + dur));
-        if (!clash) slots.push(pad(t));
+        if (taken.some((b) => b.date === ds && overlap(hm(b.time), hm(b.time) + (b.durationMin || dur), t, t + dur))) continue;
+        if (busyClash(ds, t, dur)) continue;
+        slots.push(pad(t));
       }
     });
     if (slots.length) out.push({ date: ds, slots });
@@ -219,7 +237,7 @@ app.post('/api/booking', (req, res) => {
   writeJson(BOOK_FILE, books, (e) => {
     if (e) return res.status(500).json({ error: 'Échec.' });
     notifyOwner(rec); // SMS à Laetitia avec le lien accepter/refuser
-    // Phase 3 : créer l'événement Google Agenda.
+    if (google.enabled()) google.createEvent(rec).then(function (id) { if (id) { const bb = readJson(BOOK_FILE, []); const k = bb.findIndex((x) => x.id === rec.id); if (k >= 0) { bb[k].gcalId = id; writeJson(BOOK_FILE, bb, () => {}); } } });
     res.json({ ok: true });
   });
 });
@@ -238,6 +256,7 @@ app.post('/api/bookings/:id', requireAuth, (req, res) => {
   writeJson(BOOK_FILE, books, (e) => {
     if (e) return res.status(500).json({ error: 'Échec.' });
     notifyClient(books[i]); // SMS au client (validé / refusé)
+    if (books[i].status === 'confirmed') google.confirmEvent(books[i]); else if (books[i].status === 'refused') google.deleteEvent(books[i]);
     res.json({ ok: true, booking: books[i] });
   });
 });
@@ -326,7 +345,7 @@ app.post('/r/:token', (req, res) => {
   }
   writeJson(BOOK_FILE, books, () => {});
   notifyClient(books[i]);
-  // Phase 3 : confirmer / supprimer l'événement Google Agenda.
+  if (books[i].status === 'confirmed') google.confirmEvent(books[i]); else google.deleteEvent(books[i]);
   const ok = books[i].status === 'confirmed';
   res.send(rdvPage("C'est fait", '<h1>' + (ok ? '✅ Rendez-vous confirmé' : '❌ Rendez-vous refusé') + '</h1><p>' + (ok ? 'Le client va recevoir un SMS de confirmation.' : 'Le client va être prévenu par SMS.') + '</p>'));
 });
