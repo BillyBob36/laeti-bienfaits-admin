@@ -11,9 +11,15 @@ const I = {
   img:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>',
   mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>',
   bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 11 14-7v16L3 13z"/><path d="M3 11v3a2 2 0 0 0 2 2h1"/><path d="M9 14v4a2 2 0 0 0 4 0"/></svg>',
+  rdv:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M12.5 13.5v2.5l1.8 1"/></svg>',
 };
 
 window.LB_SCHEMA = [
+  {
+    id:'rdv', label:'Rendez-vous', icon:I.rdv, custom:'rdv',
+    intro:"Réglez vos disponibilités pour la réservation en ligne, et traitez les demandes reçues (accepter / refuser).",
+    fields:[],
+  },
   {
     id:'tarifs', label:'Prestations & tarifs', icon:I.tag,
     intro:"Vos prestations et leurs prix, regroupées par catégorie. Ajoutez (＋), réordonnez (↑↓) ou supprimez (🗑) une prestation quand votre offre évolue.",

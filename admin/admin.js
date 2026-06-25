@@ -206,7 +206,11 @@ function selectSection(id) {
   if (sec.intro) {
     const p = document.createElement('p'); p.className = 'sec-intro'; p.textContent = sec.intro; c.appendChild(p);
   }
-  sec.fields.forEach((f) => c.appendChild(renderField(f, f.key)));
+  const sBtn = document.getElementById('btn-save'), sSt = document.getElementById('save-state');
+  if (sBtn) sBtn.style.display = sec.custom ? 'none' : '';
+  if (sSt) sSt.style.display = sec.custom ? 'none' : '';
+  if (sec.custom === 'rdv') renderRdv(c);
+  else (sec.fields || []).forEach((f) => c.appendChild(renderField(f, f.key)));
   c.scrollTop = 0;
 }
 
@@ -406,6 +410,135 @@ function toast(msg, isErr) {
 }
 
 /* ---------- démarrage ---------------------------------------------------- */
+/* ---------- onglet « Rendez-vous » (custom) ----------------------------- */
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+const RDV_JOURS = [['1', 'Lundi'], ['2', 'Mardi'], ['3', 'Mercredi'], ['4', 'Jeudi'], ['5', 'Vendredi'], ['6', 'Samedi'], ['0', 'Dimanche']];
+
+function renderRdv(c) {
+  const bar = document.createElement('div'); bar.className = 'rdv-tabs';
+  const bD = document.createElement('button'); bD.className = 'rdv-tab active'; bD.textContent = '📅 Mes disponibilités';
+  const bR = document.createElement('button'); bR.className = 'rdv-tab'; bR.textContent = '📨 Demandes';
+  bar.append(bD, bR); c.appendChild(bar);
+  const panel = document.createElement('div'); c.appendChild(panel);
+  function loading() { panel.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>'; }
+  function loadDispo() { loading(); api('/api/availability').then((r) => r.json()).then((av) => renderDispo(panel, av)).catch(() => { panel.innerHTML = '<p>Erreur de chargement.</p>'; }); }
+  function loadDem() { loading(); api('/api/bookings').then((r) => r.json()).then((l) => renderDem(panel, l)).catch(() => { panel.innerHTML = '<p>Erreur de chargement.</p>'; }); }
+  bD.onclick = () => { bD.classList.add('active'); bR.classList.remove('active'); loadDispo(); };
+  bR.onclick = () => { bR.classList.add('active'); bD.classList.remove('active'); loadDem(); };
+  loadDispo();
+}
+
+function renderDispo(panel, av) {
+  av.weekly = av.weekly || {}; av.blockedDates = av.blockedDates || [];
+  ['defaultDuration', 'slotInterval', 'minNoticeHours', 'horizonDays'].forEach((k) => { if (av[k] == null) av[k] = { defaultDuration: 60, slotInterval: 30, minNoticeHours: 24, horizonDays: 28 }[k]; });
+  panel.innerHTML = '';
+  const help = document.createElement('p'); help.className = 'sec-intro';
+  help.textContent = "Pour chaque jour, indiquez vos plages d'ouverture. Les créneaux proposés aux clients sont générés automatiquement à l'intérieur. Laissez un jour vide si vous ne travaillez pas ce jour-là.";
+  panel.appendChild(help);
+
+  RDV_JOURS.forEach(([k, label]) => {
+    if (!Array.isArray(av.weekly[k])) av.weekly[k] = [];
+    const row = document.createElement('div'); row.className = 'jour';
+    const h = document.createElement('div'); h.className = 'jour-h'; h.textContent = label;
+    const wins = document.createElement('div'); wins.className = 'wins';
+    function drawWins() {
+      wins.innerHTML = '';
+      av.weekly[k].forEach((w, i) => {
+        const wd = document.createElement('div'); wd.className = 'win';
+        const s = document.createElement('input'); s.type = 'time'; s.value = w.start || '09:00'; s.onchange = () => { w.start = s.value; };
+        const sep = document.createElement('span'); sep.className = 'win-sep'; sep.textContent = '→';
+        const e = document.createElement('input'); e.type = 'time'; e.value = w.end || '12:00'; e.onchange = () => { w.end = e.value; };
+        const rm = document.createElement('button'); rm.className = 'win-rm'; rm.textContent = '✕'; rm.title = 'Retirer cette plage'; rm.onclick = () => { av.weekly[k].splice(i, 1); drawWins(); };
+        wd.append(s, sep, e, rm); wins.appendChild(wd);
+      });
+      const add = document.createElement('button'); add.className = 'win-add'; add.textContent = '＋ ajouter une plage';
+      add.onclick = () => { av.weekly[k].push({ start: '09:00', end: '12:00' }); drawWins(); };
+      wins.appendChild(add);
+    }
+    drawWins();
+    row.append(h, wins); panel.appendChild(row);
+  });
+
+  const set = document.createElement('div'); set.className = 'rdv-set';
+  function numF(label, key, hint, min) {
+    const w = document.createElement('div'); w.className = 'field';
+    const l = document.createElement('label'); l.className = 'f-label'; l.textContent = label; w.appendChild(l);
+    if (hint) { const hh = document.createElement('div'); hh.className = 'f-hint'; hh.textContent = hint; w.appendChild(hh); }
+    const inp = document.createElement('input'); inp.type = 'number'; inp.className = 'f-input'; inp.value = av[key]; if (min != null) inp.min = min;
+    inp.onchange = () => { av[key] = parseInt(inp.value, 10) || 0; };
+    w.appendChild(inp); return w;
+  }
+  set.appendChild(numF("Durée par défaut d'un RDV (min)", 'defaultDuration', "Si la prestation choisie n'a pas de durée.", 15));
+  set.appendChild(numF('Intervalle entre créneaux (min)', 'slotInterval', 'Ex. 30 = un créneau proposé toutes les 30 min.', 5));
+  set.appendChild(numF('Préavis minimum (heures)', 'minNoticeHours', "Délai minimum avant un RDV.", 0));
+  set.appendChild(numF("Réservable jusqu'à (jours à l'avance)", 'horizonDays', null, 1));
+  panel.appendChild(set);
+
+  const bd = document.createElement('div'); bd.className = 'field';
+  const bl = document.createElement('label'); bl.className = 'f-label'; bl.textContent = 'Jours bloqués (congés, absences)'; bd.appendChild(bl);
+  const bdList = document.createElement('div'); bdList.className = 'bd-list';
+  function drawBd() {
+    bdList.innerHTML = '';
+    av.blockedDates.forEach((d, i) => {
+      const chip = document.createElement('span'); chip.className = 'bd-chip';
+      chip.textContent = d.split('-').reverse().join('/') + ' ';
+      const x = document.createElement('button'); x.textContent = '✕'; x.onclick = () => { av.blockedDates.splice(i, 1); drawBd(); };
+      chip.appendChild(x); bdList.appendChild(chip);
+    });
+    const add = document.createElement('input'); add.type = 'date'; add.className = 'bd-add'; add.title = 'Ajouter un jour bloqué';
+    add.onchange = () => { if (add.value && av.blockedDates.indexOf(add.value) < 0) { av.blockedDates.push(add.value); av.blockedDates.sort(); drawBd(); } };
+    bdList.appendChild(add);
+  }
+  drawBd(); bd.appendChild(bdList); panel.appendChild(bd);
+
+  const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '22px'; save.textContent = '💾 Enregistrer mes disponibilités';
+  save.onclick = async () => {
+    save.disabled = true; save.textContent = '⏳ Enregistrement…';
+    try {
+      const r = await api('/api/availability', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(av) });
+      if (!r.ok) throw new Error();
+      toast('✓ Disponibilités enregistrées.');
+    } catch (e) { toast('⚠ Échec de l\'enregistrement.', true); }
+    save.disabled = false; save.textContent = '💾 Enregistrer mes disponibilités';
+  };
+  panel.appendChild(save);
+}
+
+function renderDem(panel, list) {
+  panel.innerHTML = '';
+  if (!Array.isArray(list) || !list.length) { panel.innerHTML = '<p class="sec-intro">Aucune demande de rendez-vous pour le moment.</p>'; return; }
+  const ord = { pending: 0, confirmed: 1, refused: 2 };
+  list = list.slice().sort((a, b) => (ord[a.status] - ord[b.status]) || ((a.date + a.time) < (b.date + b.time) ? -1 : 1));
+  function decide(b, status, durationMin, card) {
+    card.style.opacity = '.5';
+    api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: status, durationMin: durationMin }) })
+      .then((r) => r.json()).then(() => {
+        toast(status === 'confirmed' ? '✓ RDV confirmé — SMS envoyé au client.' : 'Demande refusée — SMS envoyé.');
+        b.status = status; if (durationMin) b.durationMin = durationMin;
+        renderDem(panel, list);
+      }).catch(() => { toast('⚠ Échec.', true); card.style.opacity = '1'; });
+  }
+  list.forEach((b) => {
+    const card = document.createElement('div'); card.className = 'dem dem-' + b.status;
+    const st = b.status === 'pending' ? '<span class="badge wait">En attente</span>' : b.status === 'confirmed' ? '<span class="badge ok">Confirmé</span>' : '<span class="badge no">Refusé</span>';
+    const when = b.date.split('-').reverse().join('/') + ' à ' + b.time;
+    card.innerHTML = '<div class="dem-h"><b>' + esc(b.name) + '</b> ' + st + '</div>'
+      + '<div class="dem-i">📞 ' + esc(b.phone) + ' · ' + esc(b.prestation || b.motif || '—') + '</div>'
+      + '<div class="dem-w">🗓 ' + when + ' · ' + b.durationMin + ' min</div>';
+    if (b.status === 'pending') {
+      const act = document.createElement('div'); act.className = 'dem-act';
+      const lbl = document.createElement('span'); lbl.className = 'dem-durlbl'; lbl.textContent = 'Durée :';
+      const dur = document.createElement('input'); dur.type = 'number'; dur.className = 'dem-dur'; dur.value = b.durationMin; dur.min = 15; dur.step = 15;
+      const ok = document.createElement('button'); ok.className = 'dem-ok'; ok.textContent = '✅ Accepter';
+      const no = document.createElement('button'); no.className = 'dem-no'; no.textContent = '❌ Refuser';
+      ok.onclick = () => decide(b, 'confirmed', parseInt(dur.value, 10) || b.durationMin, card);
+      no.onclick = () => decide(b, 'refused', null, card);
+      act.append(lbl, dur, ok, no); card.appendChild(act);
+    }
+    panel.appendChild(card);
+  });
+}
+
 async function boot() {
   // valeurs par défaut (= contenu actuel du site) + ce qui a été enregistré
   const defs = await fetch(API + '/admin/content.default.json').then((r) => r.ok ? r.json() : {}).catch(() => ({}));
