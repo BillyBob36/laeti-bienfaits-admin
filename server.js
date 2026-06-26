@@ -236,7 +236,7 @@ app.post('/api/booking', (req, res) => {
   books.push(rec);
   writeJson(BOOK_FILE, books, (e) => {
     if (e) return res.status(500).json({ error: 'Échec.' });
-    notifyOwner(rec); // SMS à Laetitia avec le lien accepter/refuser
+    // Laetitia est notifiée par Google Agenda (événement « ⏳ DEMANDE » + email « nouveaux événements ») — plus de SMS pour elle.
     if (google.enabled()) google.createEvent(rec).then(function (id) { if (id) { const bb = readJson(BOOK_FILE, []); const k = bb.findIndex((x) => x.id === rec.id); if (k >= 0) { bb[k].gcalId = id; writeJson(BOOK_FILE, bb, () => {}); } } });
     res.json({ ok: true });
   });
@@ -290,12 +290,9 @@ async function sendSms(to, text) {
     if (!r.ok) console.warn('[sms] échec ' + r.status + ' : ' + (await r.text().catch(() => '')));
   } catch (e) { console.warn('[sms] erreur : ' + e.message); }
 }
-function notifyOwner(b) {
-  sendSms(OWNER_PHONE, "Nouvelle demande de RDV : " + b.name + " (" + b.phone + "), " + (b.prestation || b.motif || "motif non précisé") + ", le " + frWhen(b) + ". Accepter ou refuser : " + PUBLIC_BASE + "/r/" + b.token);
-}
 function notifyClient(b) {
   if (b.status === 'confirmed') sendSms(b.phone, "Bonjour " + b.name + ", votre rendez-vous du " + frWhen(b) + " avec Laeti'Bienfaits est CONFIRME. A bientot !");
-  else if (b.status === 'refused') sendSms(b.phone, "Bonjour " + b.name + ", votre demande de RDV du " + frWhen(b) + " n'a pas pu etre retenue. Contactez le 06 73 96 21 83 pour convenir d'un autre creneau. Laeti'Bienfaits");
+  else if (b.status === 'refused') sendSms(b.phone, "Bonjour " + b.name + ", votre demande de RDV du " + frWhen(b) + " n'a pas pu etre retenue. Rappelez le 06 73 96 21 83 pour un autre creneau.");
 }
 
 function rdvPage(title, inner) {
