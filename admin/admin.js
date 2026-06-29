@@ -698,7 +698,17 @@ function renderCreate(panel) {
     };
     daySel.onchange = fillTimes;
     monthSel.onchange = loadMonth; yearSel.onchange = loadMonth;
-    fillDays();
+    const shiftYM = (ym, n) => { const p = ym.split('-'); const dd = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1 + n, 1); return dd.getFullYear() + '-' + pad2(dd.getMonth() + 1); };
+    const setSelTo = (ym) => { monthSel.value = ym.slice(5, 7); yearSel.value = ym.slice(0, 4); };
+    const autoAdvance = (ym, tries) => {
+      if (tries <= 0) { days = []; fillDays(); return; }
+      fetch(API + '/api/slots?duration=60&month=' + ym).then((r) => r.json()).then((d) => {
+        if (d.days && d.days.length) { days = d.days; setSelTo(ym); fillDays(); }
+        else autoAdvance(shiftYM(ym, 1), tries - 1);
+      }).catch(() => { days = []; fillDays(); });
+    };
+    if (days.length) fillDays();
+    else { daySel.innerHTML = '<option value="">Recherche du prochain créneau…</option>'; timeSel.innerHTML = ''; autoAdvance(shiftYM(_curYM, 1), 11); }
     mSel.onchange = () => { if (mSel.value === '__autre__') { mOther.style.display = 'block'; mOther.focus(); } else { mOther.style.display = 'none'; const o = mSel.options[mSel.selectedIndex]; const d = o && parseInt(o.getAttribute('data-dur'), 10); if (d) $('#cr-dur').value = d; } };
     function setMotif(motif) { if (!motif) { mSel.value = ''; mOther.style.display = 'none'; mOther.value = ''; return; } const match = prestas.find((p) => p.name === motif); if (match) { mSel.value = motif; mOther.style.display = 'none'; mOther.value = ''; } else { mSel.value = '__autre__'; mOther.style.display = 'block'; mOther.value = motif; } }
     $('#cr-pat').onchange = () => {
