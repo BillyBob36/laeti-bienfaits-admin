@@ -171,18 +171,30 @@ app.post('/api/availability', requireAuth, (req, res) => {
 });
 
 // Créneaux libres (public) : ?duration=minutes
+function nextDate(ds) { const d = new Date(ds + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); }
 app.get('/api/slots', async (req, res) => {
   const av = readJson(AVAIL_FILE, DEFAULT_AVAIL);
   const taken = readJson(BOOK_FILE, []).filter((b) => b.status === 'pending' || b.status === 'confirmed');
   const dur = Math.max(15, parseInt(req.query.duration, 10) || av.defaultDuration || 60);
   const now = parisParts(new Date());
+  // Plage : un mois précis (?month=YYYY-MM, sans aucune limite d'horizon) ou, par défaut, ~2 mois à partir d'aujourd'hui.
+  let fromDate, toDate;
+  const mm = String(req.query.month || '').match(/^(\d{4})-(\d{2})$/);
+  if (mm) {
+    const y = +mm[1], m = +mm[2];
+    const first = mm[1] + '-' + mm[2] + '-01';
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    fromDate = first < now.date ? now.date : first;
+    toDate = mm[1] + '-' + mm[2] + '-' + String(lastDay).padStart(2, '0');
+  } else {
+    fromDate = now.date;
+    toDate = parisParts(new Date(Date.now() + 62 * 86400000)).date;
+  }
   // Anti-doublon : plages occupées dans Google Agenda (ramenées en heure locale FR)
   let busyLocal = [];
   if (google.enabled()) {
     try {
-      const fromISO = new Date().toISOString();
-      const toISO = new Date(Date.now() + ((av.horizonDays || 28) + 1) * 86400000).toISOString();
-      const busy = await google.busyRanges(fromISO, toISO);
+      const busy = await google.busyRanges(new Date(fromDate + 'T00:00:00Z').toISOString(), new Date(toDate + 'T23:59:59Z').toISOString());
       busyLocal = busy.map((r) => { const s = parisParts(new Date(r.start)), e = parisParts(new Date(r.end)); return { sd: s.date, sm: s.minutes, ed: e.date, em: e.minutes }; });
     } catch (e) { busyLocal = []; }
   }
@@ -193,8 +205,9 @@ app.get('/api/slots', async (req, res) => {
     });
   }
   const out = [];
-  for (let dd = 0; dd <= (av.horizonDays || 28); dd++) {
-    const ds = parisParts(new Date(Date.now() + dd * 86400000)).date;
+  let cur = fromDate, guard = 0;
+  while (cur <= toDate && guard < 400) {
+    const ds = cur; cur = nextDate(cur); guard++;
     if ((av.blockedDates || []).indexOf(ds) >= 0) continue;
     const windows = (av.weekly && av.weekly[String(dowOf(ds))]) || [];
     if (!windows.length) continue;
@@ -210,7 +223,7 @@ app.get('/api/slots', async (req, res) => {
     });
     if (slots.length) out.push({ date: ds, slots });
   }
-  res.json({ duration: dur, days: out });
+  res.json({ duration: dur, month: mm ? (mm[1] + '-' + mm[2]) : null, days: out });
 });
 
 // Nouvelle demande (public)
