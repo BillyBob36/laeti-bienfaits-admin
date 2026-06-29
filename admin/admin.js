@@ -643,9 +643,10 @@ function rdvParseDur(s) { if (!s) return 0; s = String(s).toLowerCase(); let m =
 function prestationsList() { const out = []; const cards = (State.content && State.content.tarifs && State.content.tarifs.cards) || []; cards.forEach((cat) => (cat.items || []).forEach((it) => { if (it && it.name) out.push({ name: it.name, duration: rdvParseDur(it.duration) }); })); return out; }
 function renderCreate(panel) {
   panel.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>';
+  const _n = new Date(), _curYM = _n.getFullYear() + '-' + (_n.getMonth() + 1 < 10 ? '0' : '') + (_n.getMonth() + 1);
   Promise.all([
     api('/api/patients').then((r) => r.json()).catch(() => []),
-    fetch(API + '/api/slots?duration=60').then((r) => r.json()).catch(() => ({ days: [] })),
+    fetch(API + '/api/slots?duration=60&month=' + _curYM).then((r) => r.json()).catch(() => ({ days: [] })),
     api('/api/bookings').then((r) => r.json()).catch(() => []),
   ]).then(([patients, slots, bookings]) => {
     patients = Array.isArray(patients) ? patients : [];
@@ -660,7 +661,7 @@ function renderCreate(panel) {
     let mopts = '<option value="">— Choisir —</option>';
     prestas.forEach((p) => { mopts += '<option value="' + esc(p.name) + '" data-dur="' + (p.duration || 0) + '">' + esc(p.name) + (p.duration ? ' (' + p.duration + ' min)' : '') + '</option>'; });
     mopts += '<option value="__autre__">Autre…</option>';
-    const days = slots.days || [];
+    let days = slots.days || [];
     form.innerHTML =
       '<label class="f-label">Patient existant</label><select class="f-input" id="cr-pat">' + opts + '</select>'
       + '<div class="cr-2"><div><label class="f-label">Prénom *</label><input class="f-input" id="cr-first"></div><div><label class="f-label">Nom *</label><input class="f-input" id="cr-last"></div></div>'
@@ -668,6 +669,7 @@ function renderCreate(panel) {
       + '<label class="f-label">Email</label><input class="f-input" id="cr-email" inputmode="email">'
       + '<label class="f-label">Motif / prestation *</label><select class="f-input" id="cr-motif-sel">' + mopts + '</select>'
       + '<input class="f-input" id="cr-motif-other" placeholder="Précisez le motif" style="display:none;margin-top:8px">'
+      + '<div class="cr-2"><div><label class="f-label">Mois</label><select class="f-input" id="cr-month"></select></div><div><label class="f-label">Année</label><select class="f-input" id="cr-year"></select></div></div>'
       + '<div class="cr-2"><div><label class="f-label">Jour *</label><select class="f-input" id="cr-day"></select></div><div><label class="f-label">Heure *</label><select class="f-input" id="cr-time"></select></div></div>'
       + '<label class="f-label">Durée (min)</label><input class="f-input" id="cr-dur" type="number" min="15" step="15" value="60">'
       + '<label class="cm-check"><input type="checkbox" id="cr-sc" checked> Envoyer un SMS de confirmation</label>'
@@ -676,9 +678,27 @@ function renderCreate(panel) {
       + '<button class="btn-save" id="cr-go" style="margin-top:4px">📅 Créer le rendez-vous</button>';
     panel.appendChild(form);
     const $ = (s) => form.querySelector(s);
-    const daySel = $('#cr-day'), timeSel = $('#cr-time'), mSel = $('#cr-motif-sel'), mOther = $('#cr-motif-other');
-    if (!days.length) { daySel.innerHTML = '<option value="">Aucun créneau libre</option>'; timeSel.innerHTML = ''; }
-    else { daySel.innerHTML = days.map((d) => '<option value="' + d.date + '">' + frDateLong(d.date) + '</option>').join(''); const fillTimes = () => { const d = days.find((x) => x.date === daySel.value) || days[0]; timeSel.innerHTML = (d.slots || []).map((t) => '<option value="' + t + '">' + t + '</option>').join(''); }; daySel.onchange = fillTimes; fillTimes(); }
+    const daySel = $('#cr-day'), timeSel = $('#cr-time'), monthSel = $('#cr-month'), yearSel = $('#cr-year'), mSel = $('#cr-motif-sel'), mOther = $('#cr-motif-other');
+    const MOISFR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const pad2 = (n) => (n < 10 ? '0' : '') + n;
+    const _today = new Date(), curY = _today.getFullYear(), curM = _today.getMonth() + 1;
+    let mo = ''; for (let m = 1; m <= 12; m++) mo += '<option value="' + pad2(m) + '"' + (m === curM ? ' selected' : '') + '>' + MOISFR[m - 1] + '</option>';
+    let yo = ''; for (let y = curY; y <= curY + 5; y++) yo += '<option value="' + y + '"' + (y === curY ? ' selected' : '') + '>' + y + '</option>';
+    monthSel.innerHTML = mo; yearSel.innerHTML = yo;
+    const fillTimes = () => { const d = days.find((x) => x.date === daySel.value) || days[0]; timeSel.innerHTML = (d && d.slots ? d.slots : []).map((t) => '<option value="' + t + '">' + t + '</option>').join(''); };
+    const fillDays = () => {
+      if (!days.length) { daySel.innerHTML = '<option value="">Aucun créneau libre ce mois-ci</option>'; timeSel.innerHTML = ''; return; }
+      daySel.innerHTML = days.map((d) => '<option value="' + d.date + '">' + frDateLong(d.date) + '</option>').join('');
+      fillTimes();
+    };
+    const loadMonth = () => {
+      const ym = yearSel.value + '-' + monthSel.value;
+      daySel.innerHTML = '<option value="">Chargement…</option>'; timeSel.innerHTML = '';
+      fetch(API + '/api/slots?duration=60&month=' + ym).then((r) => r.json()).then((d) => { days = d.days || []; fillDays(); }).catch(() => { days = []; daySel.innerHTML = '<option value="">Erreur de chargement</option>'; timeSel.innerHTML = ''; });
+    };
+    daySel.onchange = fillTimes;
+    monthSel.onchange = loadMonth; yearSel.onchange = loadMonth;
+    fillDays();
     mSel.onchange = () => { if (mSel.value === '__autre__') { mOther.style.display = 'block'; mOther.focus(); } else { mOther.style.display = 'none'; const o = mSel.options[mSel.selectedIndex]; const d = o && parseInt(o.getAttribute('data-dur'), 10); if (d) $('#cr-dur').value = d; } };
     function setMotif(motif) { if (!motif) { mSel.value = ''; mOther.style.display = 'none'; mOther.value = ''; return; } const match = prestas.find((p) => p.name === motif); if (match) { mSel.value = motif; mOther.style.display = 'none'; mOther.value = ''; } else { mSel.value = '__autre__'; mOther.style.display = 'block'; mOther.value = motif; } }
     $('#cr-pat').onchange = () => {
