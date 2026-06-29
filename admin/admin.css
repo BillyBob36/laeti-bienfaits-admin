@@ -138,6 +138,8 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 .bd-chip{display:inline-flex;align-items:center;gap:4px;background:#fdecea;border:1px solid #e8b4ad;color:#8a2f23;font-weight:600;font-size:14px;padding:7px 12px;border-radius:999px;}
 .bd-chip button{border:0;background:transparent;color:#8a2f23;cursor:pointer;font-size:12px;}
 .bd-add{padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:14px;}
+.rdv-note{background:var(--cream2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;color:var(--green);font-size:14.5px;line-height:1.6;margin-top:22px;}
+.rdv-note strong{color:var(--terra);}
 /* demandes */
 .dem{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:12px;box-shadow:var(--shadow);}
 .dem-pending{border-left:4px solid var(--terra);}

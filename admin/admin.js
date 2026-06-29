@@ -459,37 +459,9 @@ function renderDispo(panel, av) {
     row.append(h, wins); panel.appendChild(row);
   });
 
-  const set = document.createElement('div'); set.className = 'rdv-set';
-  function numF(label, key, hint, min) {
-    const w = document.createElement('div'); w.className = 'field';
-    const l = document.createElement('label'); l.className = 'f-label'; l.textContent = label; w.appendChild(l);
-    if (hint) { const hh = document.createElement('div'); hh.className = 'f-hint'; hh.textContent = hint; w.appendChild(hh); }
-    const inp = document.createElement('input'); inp.type = 'number'; inp.className = 'f-input'; inp.value = av[key]; if (min != null) inp.min = min;
-    inp.onchange = () => { av[key] = parseInt(inp.value, 10) || 0; };
-    w.appendChild(inp); return w;
-  }
-  set.appendChild(numF("Durée par défaut d'un RDV (min)", 'defaultDuration', "Si la prestation choisie n'a pas de durée.", 15));
-  set.appendChild(numF('Intervalle entre créneaux (min)', 'slotInterval', 'Ex. 30 = un créneau proposé toutes les 30 min.', 5));
-  set.appendChild(numF('Préavis minimum (heures)', 'minNoticeHours', "Délai minimum avant un RDV.", 0));
-  set.appendChild(numF("Réservable jusqu'à (jours à l'avance)", 'horizonDays', null, 1));
-  panel.appendChild(set);
-
-  const bd = document.createElement('div'); bd.className = 'field';
-  const bl = document.createElement('label'); bl.className = 'f-label'; bl.textContent = 'Jours bloqués (congés, absences)'; bd.appendChild(bl);
-  const bdList = document.createElement('div'); bdList.className = 'bd-list';
-  function drawBd() {
-    bdList.innerHTML = '';
-    av.blockedDates.forEach((d, i) => {
-      const chip = document.createElement('span'); chip.className = 'bd-chip';
-      chip.textContent = d.split('-').reverse().join('/') + ' ';
-      const x = document.createElement('button'); x.textContent = '✕'; x.onclick = () => { av.blockedDates.splice(i, 1); drawBd(); };
-      chip.appendChild(x); bdList.appendChild(chip);
-    });
-    const add = document.createElement('input'); add.type = 'date'; add.className = 'bd-add'; add.title = 'Ajouter un jour bloqué';
-    add.onchange = () => { if (add.value && av.blockedDates.indexOf(add.value) < 0) { av.blockedDates.push(add.value); av.blockedDates.sort(); drawBd(); } };
-    bdList.appendChild(add);
-  }
-  drawBd(); bd.appendChild(bdList); panel.appendChild(bd);
+  const note = document.createElement('div'); note.className = 'rdv-note';
+  note.innerHTML = '<strong>Congés, absence, ou rendez-vous personnel&nbsp;?</strong><br>Ajoutez simplement l\'événement dans votre <strong>agenda Google</strong> (même une journée entière «&nbsp;Congés&nbsp;»). Les créneaux concernés se libèrent automatiquement — rien à indiquer ici.';
+  panel.appendChild(note);
 
   const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '22px'; save.textContent = '💾 Enregistrer mes disponibilités';
   save.onclick = async () => {
