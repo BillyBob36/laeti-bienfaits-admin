@@ -639,23 +639,35 @@ function patientModal(p, onSave) {
 
 /* ---------- sous-onglet « Nouveau RDV » --------------------------------- */
 function frDateLong(ds) { try { const s = new Date(ds + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1); } catch (e) { return ds; } }
+function rdvParseDur(s) { if (!s) return 0; s = String(s).toLowerCase(); let m = s.match(/(\d+)\s*h\s*(\d+)?/); if (m) return parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0); m = s.match(/(\d+)\s*min/); return m ? parseInt(m[1], 10) : 0; }
+function prestationsList() { const out = []; const cards = (State.content && State.content.tarifs && State.content.tarifs.cards) || []; cards.forEach((cat) => (cat.items || []).forEach((it) => { if (it && it.name) out.push({ name: it.name, duration: rdvParseDur(it.duration) }); })); return out; }
 function renderCreate(panel) {
   panel.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>';
-  Promise.all([api('/api/patients').then((r) => r.json()).catch(() => []), fetch(API + '/api/slots?duration=60').then((r) => r.json()).catch(() => ({ days: [] }))]).then(([patients, slots]) => {
+  Promise.all([
+    api('/api/patients').then((r) => r.json()).catch(() => []),
+    fetch(API + '/api/slots?duration=60').then((r) => r.json()).catch(() => ({ days: [] })),
+    api('/api/bookings').then((r) => r.json()).catch(() => []),
+  ]).then(([patients, slots, bookings]) => {
     patients = Array.isArray(patients) ? patients : [];
+    bookings = Array.isArray(bookings) ? bookings : [];
+    const prestas = prestationsList();
     panel.innerHTML = '';
     const intro = document.createElement('p'); intro.className = 'sec-intro'; intro.textContent = 'Créez un rendez-vous vous-même (appel, en direct…). Il est confirmé immédiatement, ajouté à votre agenda Google, et un SMS peut partir au patient.';
     panel.appendChild(intro);
     const form = document.createElement('div'); form.className = 'cr-form';
     let opts = '<option value="">— Nouveau patient —</option>';
     patients.slice().sort((a, b) => (a.lastname || '').localeCompare(b.lastname || '')).forEach((p) => { opts += '<option value="' + p.id + '">' + esc(((p.firstname || '') + ' ' + (p.lastname || '')).trim() + (p.phone ? ' · ' + p.phone : '')) + '</option>'; });
+    let mopts = '<option value="">— Choisir —</option>';
+    prestas.forEach((p) => { mopts += '<option value="' + esc(p.name) + '" data-dur="' + (p.duration || 0) + '">' + esc(p.name) + (p.duration ? ' (' + p.duration + ' min)' : '') + '</option>'; });
+    mopts += '<option value="__autre__">Autre…</option>';
     const days = slots.days || [];
     form.innerHTML =
       '<label class="f-label">Patient existant</label><select class="f-input" id="cr-pat">' + opts + '</select>'
       + '<div class="cr-2"><div><label class="f-label">Prénom *</label><input class="f-input" id="cr-first"></div><div><label class="f-label">Nom *</label><input class="f-input" id="cr-last"></div></div>'
       + '<label class="f-label">Téléphone *</label><input class="f-input" id="cr-phone" inputmode="tel">'
       + '<label class="f-label">Email</label><input class="f-input" id="cr-email" inputmode="email">'
-      + '<label class="f-label">Motif / prestation *</label><input class="f-input" id="cr-motif">'
+      + '<label class="f-label">Motif / prestation *</label><select class="f-input" id="cr-motif-sel">' + mopts + '</select>'
+      + '<input class="f-input" id="cr-motif-other" placeholder="Précisez le motif" style="display:none;margin-top:8px">'
       + '<div class="cr-2"><div><label class="f-label">Jour *</label><select class="f-input" id="cr-day"></select></div><div><label class="f-label">Heure *</label><select class="f-input" id="cr-time"></select></div></div>'
       + '<label class="f-label">Durée (min)</label><input class="f-input" id="cr-dur" type="number" min="15" step="15" value="60">'
       + '<label class="cm-check"><input type="checkbox" id="cr-sc" checked> Envoyer un SMS de confirmation</label>'
@@ -664,14 +676,29 @@ function renderCreate(panel) {
       + '<button class="btn-save" id="cr-go" style="margin-top:4px">📅 Créer le rendez-vous</button>';
     panel.appendChild(form);
     const $ = (s) => form.querySelector(s);
-    const daySel = $('#cr-day'), timeSel = $('#cr-time');
+    const daySel = $('#cr-day'), timeSel = $('#cr-time'), mSel = $('#cr-motif-sel'), mOther = $('#cr-motif-other');
     if (!days.length) { daySel.innerHTML = '<option value="">Aucun créneau libre</option>'; timeSel.innerHTML = ''; }
     else { daySel.innerHTML = days.map((d) => '<option value="' + d.date + '">' + frDateLong(d.date) + '</option>').join(''); const fillTimes = () => { const d = days.find((x) => x.date === daySel.value) || days[0]; timeSel.innerHTML = (d.slots || []).map((t) => '<option value="' + t + '">' + t + '</option>').join(''); }; daySel.onchange = fillTimes; fillTimes(); }
-    $('#cr-pat').onchange = () => { const p = patients.find((x) => x.id === $('#cr-pat').value); if (p) { $('#cr-first').value = p.firstname || ''; $('#cr-last').value = p.lastname || ''; $('#cr-phone').value = p.phone || ''; $('#cr-email').value = p.email || ''; $('#cr-motif').value = p.motif || ''; } };
+    mSel.onchange = () => { if (mSel.value === '__autre__') { mOther.style.display = 'block'; mOther.focus(); } else { mOther.style.display = 'none'; const o = mSel.options[mSel.selectedIndex]; const d = o && parseInt(o.getAttribute('data-dur'), 10); if (d) $('#cr-dur').value = d; } };
+    function setMotif(motif) { if (!motif) { mSel.value = ''; mOther.style.display = 'none'; mOther.value = ''; return; } const match = prestas.find((p) => p.name === motif); if (match) { mSel.value = motif; mOther.style.display = 'none'; mOther.value = ''; } else { mSel.value = '__autre__'; mOther.style.display = 'block'; mOther.value = motif; } }
+    $('#cr-pat').onchange = () => {
+      const p = patients.find((x) => x.id === $('#cr-pat').value); if (!p) return;
+      const k = String(p.phone || '').replace(/[^0-9]/g, '');
+      const hist = bookings.filter((b) => k && String(b.phone || '').replace(/[^0-9]/g, '') === k).sort((a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || '')));
+      const last = hist[0];
+      $('#cr-first').value = (last && last.firstname) || p.firstname || '';
+      $('#cr-last').value = (last && last.lastname) || p.lastname || '';
+      $('#cr-phone').value = (last && last.phone) || p.phone || '';
+      $('#cr-email').value = (last && last.email) || p.email || '';
+      setMotif((last && (last.prestation || last.motif)) || p.motif || '');
+      if (last && last.durationMin) $('#cr-dur').value = last.durationMin;
+    };
     $('#cr-go').onclick = () => {
-      const v = { firstname: $('#cr-first').value.trim(), lastname: $('#cr-last').value.trim(), phone: $('#cr-phone').value.trim(), email: $('#cr-email').value.trim(), motif: $('#cr-motif').value.trim(), date: daySel.value, time: timeSel.value, duration: parseInt($('#cr-dur').value, 10) || 60, sendConfirm: $('#cr-sc').checked, sendReminder: $('#cr-sr').checked };
+      const isAutre = mSel.value === '__autre__';
+      const motif = isAutre ? mOther.value.trim() : mSel.value;
+      const v = { firstname: $('#cr-first').value.trim(), lastname: $('#cr-last').value.trim(), phone: $('#cr-phone').value.trim(), email: $('#cr-email').value.trim(), motif: motif, prestation: isAutre ? '' : motif, date: daySel.value, time: timeSel.value, duration: parseInt($('#cr-dur').value, 10) || 60, sendConfirm: $('#cr-sc').checked, sendReminder: $('#cr-sr').checked };
       const err = $('#cr-err'); err.textContent = '';
-      if (!v.firstname || !v.lastname || !v.motif) { err.textContent = 'Prénom, nom et motif sont obligatoires.'; return; }
+      if (!v.firstname || !v.lastname || !v.motif) { err.textContent = 'Prénom, nom et motif (prestation ou « Autre ») sont obligatoires.'; return; }
       if (!v.date || !v.time) { err.textContent = 'Choisissez un créneau libre.'; return; }
       const isMob = isMobilePhone(v.phone);
       if ((v.sendConfirm || v.sendReminder) && !isMob) { if (!confirm('Téléphone absent ou non mobile : les SMS ne pourront pas être envoyés. Créer quand même le rendez-vous ?')) return; }
