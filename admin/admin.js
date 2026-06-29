@@ -304,13 +304,18 @@ function renderList(field, path) {
     const o = {}; field.item.forEach((f) => { o[f.key] = f.type === 'list' ? [] : ''; }); return o;
   }
   function redraw() { box.innerHTML = ''; draw(); }
+  function closeAll() { box.querySelectorAll('.list-item.open').forEach((c) => c.classList.remove('open')); }
   function draw() {
+    const isObj = typeof field.item !== 'string';
     arr.forEach((_, i) => {
       const itemPath = path + '.' + i;
-      const card = document.createElement('div'); card.className = 'list-item';
+      const card = document.createElement('div'); card.className = 'list-item' + (isObj ? ' acc' : '');
       const head = document.createElement('div'); head.className = 'list-head';
+      if (isObj) { const chev = document.createElement('span'); chev.className = 'acc-chev'; head.appendChild(chev); }
       const title = document.createElement('span'); title.className = 'list-title';
-      title.textContent = (field.itemLabel || 'Élément') + ' ' + (i + 1);
+      let ttl = (field.itemLabel || 'Élément') + ' ' + (i + 1);
+      if (isObj) { const lk = (field.item.find((f) => f.type === 'text') || field.item[0] || {}).key; const v = lk ? getPath(State.content, itemPath + '.' + lk) : ''; if (v) ttl = v; }
+      title.textContent = ttl;
       const tools = document.createElement('div'); tools.className = 'list-tools';
       const up = mini('↑', () => { if (i > 0) { [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]]; markDirty(); redraw(); } });
       const down = mini('↓', () => { if (i < arr.length - 1) { [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]]; markDirty(); redraw(); } });
@@ -318,11 +323,14 @@ function renderList(field, path) {
       tools.append(up, down, del);
       head.append(title, tools);
       card.appendChild(head);
+      const cbody = document.createElement('div'); cbody.className = isObj ? 'acc-body' : 'item-body';
       if (typeof field.item === 'string') {
-        card.appendChild(renderField({ type: field.item, label: '' }, itemPath));
+        cbody.appendChild(renderField({ type: field.item, label: '' }, itemPath));
       } else {
-        field.item.forEach((sub) => card.appendChild(renderField(sub, itemPath + '.' + sub.key)));
+        field.item.forEach((sub) => cbody.appendChild(renderField(sub, itemPath + '.' + sub.key)));
       }
+      card.appendChild(cbody);
+      if (isObj) head.addEventListener('click', (e) => { if (e.target.closest('.list-tools')) return; const wasOpen = card.classList.contains('open'); closeAll(); if (!wasOpen) card.classList.add('open'); });
       box.appendChild(card);
     });
     const add = document.createElement('button'); add.className = 'btn-add';
