@@ -210,6 +210,8 @@ function selectSection(id) {
   if (sBtn) sBtn.style.display = sec.custom ? 'none' : '';
   if (sSt) sSt.style.display = sec.custom ? 'none' : '';
   if (sec.custom === 'rdv') renderRdv(c);
+  else if (sec.custom === 'patients') renderPatients(c);
+  else if (sec.custom === 'sms') renderSms(c);
   else (sec.fields || []).forEach((f) => c.appendChild(renderField(f, f.key)));
   c.scrollTop = 0;
 }
@@ -425,14 +427,17 @@ const RDV_JOURS = [['1', 'Lundi'], ['2', 'Mardi'], ['3', 'Mercredi'], ['4', 'Jeu
 function renderRdv(c) {
   const bar = document.createElement('div'); bar.className = 'rdv-tabs';
   const bD = document.createElement('button'); bD.className = 'rdv-tab active'; bD.textContent = '📅 Mes disponibilités';
+  const bC = document.createElement('button'); bC.className = 'rdv-tab'; bC.textContent = '➕ Nouveau RDV';
   const bR = document.createElement('button'); bR.className = 'rdv-tab'; bR.textContent = '📨 Demandes';
-  bar.append(bD, bR); c.appendChild(bar);
+  bar.append(bD, bC, bR); c.appendChild(bar);
   const panel = document.createElement('div'); c.appendChild(panel);
   function loading() { panel.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>'; }
   function loadDispo() { loading(); api('/api/availability').then((r) => r.json()).then((av) => renderDispo(panel, av)).catch(() => { panel.innerHTML = '<p>Erreur de chargement.</p>'; }); }
   function loadDem() { loading(); api('/api/bookings').then((r) => r.json()).then((l) => renderDem(panel, l)).catch(() => { panel.innerHTML = '<p>Erreur de chargement.</p>'; }); }
-  bD.onclick = () => { bD.classList.add('active'); bR.classList.remove('active'); loadDispo(); };
-  bR.onclick = () => { bR.classList.add('active'); bD.classList.remove('active'); loadDem(); };
+  function tab(btn, fn) { [bD, bC, bR].forEach((x) => x.classList.remove('active')); btn.classList.add('active'); fn(); }
+  bD.onclick = () => tab(bD, loadDispo);
+  bC.onclick = () => tab(bC, () => renderCreate(panel));
+  bR.onclick = () => tab(bR, loadDem);
   loadDispo();
 }
 
@@ -489,14 +494,21 @@ function renderDem(panel, list) {
   if (!Array.isArray(list) || !list.length) { panel.innerHTML = '<p class="sec-intro">Aucune demande de rendez-vous pour le moment.</p>'; return; }
   const ord = { pending: 0, confirmed: 1, refused: 2 };
   list = list.slice().sort((a, b) => (ord[a.status] - ord[b.status]) || ((a.date + a.time) < (b.date + b.time) ? -1 : 1));
-  function decide(b, status, durationMin, card) {
+  function applyDecision(b, status, durationMin, opts, card) {
     card.style.opacity = '.5';
-    api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: status, durationMin: durationMin }) })
-      .then((r) => r.json()).then(() => {
-        toast(status === 'confirmed' ? '✓ RDV confirmé — SMS envoyé au client.' : 'Demande refusée — SMS envoyé.');
-        b.status = status; if (durationMin) b.durationMin = durationMin;
-        renderDem(panel, list);
-      }).catch(() => { toast('⚠ Échec.', true); card.style.opacity = '1'; });
+    api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ status: status, durationMin: durationMin }, opts)) })
+      .then((r) => r.json()).then(() => { toast(status === 'confirmed' ? '✓ RDV confirmé.' : 'Demande refusée.'); b.status = status; if (durationMin) b.durationMin = durationMin; renderDem(panel, list); })
+      .catch(() => { toast('⚠ Échec.', true); card.style.opacity = '1'; });
+  }
+  function decide(b, status, durationMin, card) {
+    const isMob = isMobilePhone(b.phone);
+    api('/api/sms-templates').then((r) => r.json()).then((tpl) => {
+      if (status === 'confirmed') {
+        smsConfirmModal('Confirmer le rendez-vous', [{ key: 'confirm', label: 'Envoyer le SMS de confirmation', checked: true }, { key: 'reminder', label: 'Envoyer le SMS de rappel (2 j avant)', checked: true }], fillSmsPreview(tpl.confirm || '', b), isMob, (s) => applyDecision(b, 'confirmed', durationMin, { sendConfirm: !!s.confirm, sendReminder: !!s.reminder, customSms: s.custom ? s.text : undefined }, card));
+      } else {
+        smsConfirmModal('Refuser la demande', [{ key: 'refuse', label: 'Envoyer un SMS pour informer du refus', checked: true }], fillSmsPreview(tpl.refuse || '', b), isMob, (s) => applyDecision(b, 'refused', null, { sendRefuse: !!s.refuse, customSms: s.custom ? s.text : undefined }, card));
+      }
+    }).catch(() => applyDecision(b, status, durationMin, {}, card));
   }
   list.forEach((b) => {
     const card = document.createElement('div'); card.className = 'dem dem-' + b.status;
@@ -517,6 +529,156 @@ function renderDem(panel, list) {
     }
     panel.appendChild(card);
   });
+}
+
+/* ---------- aperçu d'un SMS (variables remplacées côté client) ----------- */
+function fillSmsPreview(tpl, b) {
+  const p = String(b.date || '').split('-');
+  return String(tpl)
+    .replace(/{prenom}/g, b.firstname || String(b.name || '').trim().split(/\s+/)[0] || '')
+    .replace(/{nom}/g, b.lastname || '')
+    .replace(/{date}/g, p[2] ? (p[2] + '/' + p[1] + '/' + p[0]) : '')
+    .replace(/{heure}/g, b.time || '')
+    .replace(/{motif}/g, b.prestation || b.motif || '');
+}
+function isMobilePhone(phone) { const d = String(phone || '').replace(/[^0-9]/g, '').replace(/^33/, '0'); return /^0[67]\d{8}$/.test(d); }
+
+/* ---------- modale de confirmation d'envoi SMS (Accepter / Refuser) ------ */
+function smsConfirmModal(title, checks, defaultText, isMobile, onValidate) {
+  const ov = document.createElement('div'); ov.className = 'cm-ov';
+  const box = document.createElement('div'); box.className = 'cm-box';
+  let html = '<h3 class="cm-title">' + esc(title) + '</h3>';
+  if (!isMobile) html += '<div class="cm-warn">⚠ Le numéro n\'est pas un mobile : aucun SMS ne pourra être envoyé.</div>';
+  checks.forEach((c) => { html += '<label class="cm-check"><input type="checkbox" data-k="' + c.key + '"' + (c.checked && isMobile ? ' checked' : '') + (isMobile ? '' : ' disabled') + '> ' + esc(c.label) + '</label>'; });
+  html += '<button type="button" class="cm-custom-toggle">✏️ Personnaliser le SMS</button>';
+  html += '<textarea class="cm-text" rows="3" style="display:none">' + esc(defaultText) + '</textarea>';
+  html += '<div class="cm-act"><button type="button" class="cm-cancel">Annuler</button><button type="button" class="cm-ok">Valider</button></div>';
+  box.innerHTML = html; ov.appendChild(box); document.body.appendChild(ov);
+  const ta = box.querySelector('.cm-text'); let customOn = false;
+  box.querySelector('.cm-custom-toggle').onclick = () => { customOn = !customOn; ta.style.display = customOn ? 'block' : 'none'; box.querySelector('.cm-custom-toggle').classList.toggle('on', customOn); };
+  function close() { ov.remove(); }
+  box.querySelector('.cm-cancel').onclick = close; ov.onclick = (e) => { if (e.target === ov) close(); };
+  box.querySelector('.cm-ok').onclick = () => { const state = { custom: customOn, text: ta.value }; box.querySelectorAll('input[data-k]').forEach((i) => { state[i.getAttribute('data-k')] = i.checked; }); close(); onValidate(state); };
+}
+
+/* ---------- onglet « Messages SMS » ------------------------------------- */
+function renderSms(c) {
+  const wrap = document.createElement('div'); c.appendChild(wrap);
+  wrap.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>';
+  api('/api/sms-templates').then((r) => r.json()).then((tpl) => {
+    wrap.innerHTML = '';
+    const defs = [['confirm', 'SMS de confirmation', 'Envoyé quand vous acceptez ou créez un RDV.'], ['reminder', 'SMS de rappel (2 jours avant)', 'Envoyé automatiquement 2 jours avant le RDV.'], ['refuse', 'SMS de refus', 'Envoyé quand vous refusez une demande.']];
+    const tas = {};
+    defs.forEach(([k, label, hint]) => {
+      const f = document.createElement('div'); f.className = 'field';
+      f.innerHTML = '<label class="f-label">' + label + '</label><div class="f-hint">' + hint + '</div>';
+      const ta = document.createElement('textarea'); ta.className = 'f-input'; ta.rows = 3; ta.value = tpl[k] || '';
+      const cnt = document.createElement('div'); cnt.className = 'sms-count';
+      function upd() { const n = ta.value.length; cnt.textContent = n + ' caractères · ' + (n > 160 ? Math.ceil(n / 153) + ' SMS' : '1 SMS'); }
+      ta.addEventListener('input', upd); upd(); tas[k] = ta; f.append(ta, cnt); wrap.appendChild(f);
+    });
+    const hint = document.createElement('p'); hint.className = 'f-hint'; hint.style.marginTop = '4px';
+    hint.textContent = 'Variables : {prenom} {date} {heure} {motif} — remplacées automatiquement à l\'envoi.';
+    wrap.appendChild(hint);
+    const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '18px'; save.textContent = '💾 Enregistrer les messages';
+    save.onclick = async () => { save.disabled = true; save.textContent = '⏳…'; try { const r = await api('/api/sms-templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: tas.confirm.value, reminder: tas.reminder.value, refuse: tas.refuse.value }) }); if (!r.ok) throw 0; toast('✓ Messages enregistrés.'); } catch (e) { toast('⚠ Échec.', true); } save.disabled = false; save.textContent = '💾 Enregistrer les messages'; };
+    wrap.appendChild(save);
+  }).catch(() => { wrap.innerHTML = '<p>Erreur de chargement.</p>'; });
+}
+
+/* ---------- onglet « Patients » ----------------------------------------- */
+function renderPatients(c) {
+  const wrap = document.createElement('div'); c.appendChild(wrap);
+  function load() { wrap.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>'; api('/api/patients').then((r) => r.json()).then((l) => draw(Array.isArray(l) ? l : [])).catch(() => { wrap.innerHTML = '<p>Erreur.</p>'; }); }
+  function draw(list) {
+    wrap.innerHTML = '';
+    const bar = document.createElement('div'); bar.className = 'pat-bar';
+    const add = document.createElement('button'); add.className = 'btn-add'; add.textContent = '＋ Nouveau patient';
+    const exp = document.createElement('button'); exp.className = 'btn-mini'; exp.textContent = '⬇ Exporter CSV';
+    const imp = document.createElement('label'); imp.className = 'btn-mini'; imp.textContent = '⬆ Importer CSV';
+    const impf = document.createElement('input'); impf.type = 'file'; impf.accept = '.csv,text/csv'; impf.style.display = 'none'; imp.appendChild(impf);
+    bar.append(add, exp, imp); wrap.appendChild(bar);
+    add.onclick = () => patientModal({}, load);
+    exp.onclick = () => api('/api/patients/export').then((r) => r.text()).then((csv) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'patients.csv'; a.click(); URL.revokeObjectURL(a.href); });
+    impf.onchange = () => { const f = impf.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => api('/api/patients/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv: rd.result }) }).then((r) => r.json()).then((d) => { toast('✓ ' + (d.added || 0) + ' ajouté(s), ' + (d.updated || 0) + ' mis à jour.'); load(); }).catch(() => toast('⚠ Échec import.', true)); rd.readAsText(f); };
+    if (!list.length) { const e = document.createElement('p'); e.className = 'sec-intro'; e.textContent = 'Aucun patient pour le moment.'; wrap.appendChild(e); }
+    list.slice().sort((a, b) => (a.lastname || '').localeCompare(b.lastname || '')).forEach((p) => {
+      const card = document.createElement('div'); card.className = 'list-item acc';
+      const head = document.createElement('div'); head.className = 'list-head';
+      const chev = document.createElement('span'); chev.className = 'acc-chev';
+      const title = document.createElement('span'); title.className = 'list-title'; title.textContent = ((p.firstname || '') + ' ' + (p.lastname || '')).trim() || '(sans nom)';
+      const tools = document.createElement('div'); tools.className = 'list-tools';
+      const del = document.createElement('button'); del.className = 'btn-icon danger'; del.textContent = '🗑';
+      del.onclick = (e) => { e.stopPropagation(); if (confirm('Supprimer ' + title.textContent + ' ?')) api('/api/patients/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) }).then(() => { toast('Patient supprimé.'); load(); }); };
+      tools.appendChild(del); head.append(chev, title, tools); card.appendChild(head);
+      const body = document.createElement('div'); body.className = 'acc-body';
+      body.innerHTML = '<div class="pat-line">📞 ' + esc(p.phone || '—') + (p.email ? ' · ✉ ' + esc(p.email) : '') + '</div>' + (p.motif ? '<div class="pat-line">' + esc(p.motif) + '</div>' : '') + (p.notes ? '<div class="pat-line" style="color:#6f7c69">' + esc(p.notes) + '</div>' : '');
+      const ed = document.createElement('button'); ed.className = 'btn-mini'; ed.textContent = '✏️ Modifier'; ed.style.marginTop = '8px'; ed.onclick = () => patientModal(p, load); body.appendChild(ed); card.appendChild(body);
+      head.addEventListener('click', (e) => { if (e.target.closest('.list-tools')) return; const o = card.classList.contains('open'); wrap.querySelectorAll('.list-item.open').forEach((x) => x.classList.remove('open')); if (!o) card.classList.add('open'); });
+      wrap.appendChild(card);
+    });
+  }
+  load();
+}
+function patientModal(p, onSave) {
+  const fields = [['firstname', 'Prénom'], ['lastname', 'Nom'], ['phone', 'Téléphone'], ['email', 'Email'], ['motif', 'Motif habituel'], ['notes', 'Notes']];
+  const ov = document.createElement('div'); ov.className = 'cm-ov';
+  const box = document.createElement('div'); box.className = 'cm-box';
+  let html = '<h3 class="cm-title">' + (p.id ? 'Modifier le patient' : 'Nouveau patient') + '</h3>';
+  fields.forEach(([k, label]) => { html += '<label class="cm-lbl">' + label + '</label>' + (k === 'notes' || k === 'motif' ? '<textarea class="cm-in" data-k="' + k + '" rows="2">' + esc(p[k] || '') + '</textarea>' : '<input class="cm-in" data-k="' + k + '" value="' + esc(p[k] || '') + '">'); });
+  html += '<div class="cm-act"><button type="button" class="cm-cancel">Annuler</button><button type="button" class="cm-ok">Enregistrer</button></div>';
+  box.innerHTML = html; ov.appendChild(box); document.body.appendChild(ov);
+  function close() { ov.remove(); }
+  box.querySelector('.cm-cancel').onclick = close; ov.onclick = (e) => { if (e.target === ov) close(); };
+  box.querySelector('.cm-ok').onclick = () => {
+    const body = { id: p.id }; box.querySelectorAll('[data-k]').forEach((i) => { body[i.getAttribute('data-k')] = i.value; });
+    if (!body.firstname && !body.lastname) { toast('Indiquez au moins un nom.', true); return; }
+    api('/api/patients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()).then(() => { toast('✓ Patient enregistré.'); close(); onSave(); }).catch(() => toast('⚠ Échec.', true));
+  };
+}
+
+/* ---------- sous-onglet « Nouveau RDV » --------------------------------- */
+function frDateLong(ds) { try { const s = new Date(ds + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1); } catch (e) { return ds; } }
+function renderCreate(panel) {
+  panel.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>';
+  Promise.all([api('/api/patients').then((r) => r.json()).catch(() => []), fetch(API + '/api/slots?duration=60').then((r) => r.json()).catch(() => ({ days: [] }))]).then(([patients, slots]) => {
+    patients = Array.isArray(patients) ? patients : [];
+    panel.innerHTML = '';
+    const intro = document.createElement('p'); intro.className = 'sec-intro'; intro.textContent = 'Créez un rendez-vous vous-même (appel, en direct…). Il est confirmé immédiatement, ajouté à votre agenda Google, et un SMS peut partir au patient.';
+    panel.appendChild(intro);
+    const form = document.createElement('div'); form.className = 'cr-form';
+    let opts = '<option value="">— Nouveau patient —</option>';
+    patients.slice().sort((a, b) => (a.lastname || '').localeCompare(b.lastname || '')).forEach((p) => { opts += '<option value="' + p.id + '">' + esc(((p.firstname || '') + ' ' + (p.lastname || '')).trim() + (p.phone ? ' · ' + p.phone : '')) + '</option>'; });
+    const days = slots.days || [];
+    form.innerHTML =
+      '<label class="f-label">Patient existant</label><select class="f-input" id="cr-pat">' + opts + '</select>'
+      + '<div class="cr-2"><div><label class="f-label">Prénom *</label><input class="f-input" id="cr-first"></div><div><label class="f-label">Nom *</label><input class="f-input" id="cr-last"></div></div>'
+      + '<label class="f-label">Téléphone *</label><input class="f-input" id="cr-phone" inputmode="tel">'
+      + '<label class="f-label">Email</label><input class="f-input" id="cr-email" inputmode="email">'
+      + '<label class="f-label">Motif / prestation *</label><input class="f-input" id="cr-motif">'
+      + '<div class="cr-2"><div><label class="f-label">Jour *</label><select class="f-input" id="cr-day"></select></div><div><label class="f-label">Heure *</label><select class="f-input" id="cr-time"></select></div></div>'
+      + '<label class="f-label">Durée (min)</label><input class="f-input" id="cr-dur" type="number" min="15" step="15" value="60">'
+      + '<label class="cm-check"><input type="checkbox" id="cr-sc" checked> Envoyer un SMS de confirmation</label>'
+      + '<label class="cm-check"><input type="checkbox" id="cr-sr" checked> Envoyer un SMS de rappel (2 j avant)</label>'
+      + '<div class="rdv-err" id="cr-err" style="color:#b0392b;font-size:14px;min-height:18px;margin-top:8px"></div>'
+      + '<button class="btn-save" id="cr-go" style="margin-top:4px">📅 Créer le rendez-vous</button>';
+    panel.appendChild(form);
+    const $ = (s) => form.querySelector(s);
+    const daySel = $('#cr-day'), timeSel = $('#cr-time');
+    if (!days.length) { daySel.innerHTML = '<option value="">Aucun créneau libre</option>'; timeSel.innerHTML = ''; }
+    else { daySel.innerHTML = days.map((d) => '<option value="' + d.date + '">' + frDateLong(d.date) + '</option>').join(''); const fillTimes = () => { const d = days.find((x) => x.date === daySel.value) || days[0]; timeSel.innerHTML = (d.slots || []).map((t) => '<option value="' + t + '">' + t + '</option>').join(''); }; daySel.onchange = fillTimes; fillTimes(); }
+    $('#cr-pat').onchange = () => { const p = patients.find((x) => x.id === $('#cr-pat').value); if (p) { $('#cr-first').value = p.firstname || ''; $('#cr-last').value = p.lastname || ''; $('#cr-phone').value = p.phone || ''; $('#cr-email').value = p.email || ''; $('#cr-motif').value = p.motif || ''; } };
+    $('#cr-go').onclick = () => {
+      const v = { firstname: $('#cr-first').value.trim(), lastname: $('#cr-last').value.trim(), phone: $('#cr-phone').value.trim(), email: $('#cr-email').value.trim(), motif: $('#cr-motif').value.trim(), date: daySel.value, time: timeSel.value, duration: parseInt($('#cr-dur').value, 10) || 60, sendConfirm: $('#cr-sc').checked, sendReminder: $('#cr-sr').checked };
+      const err = $('#cr-err'); err.textContent = '';
+      if (!v.firstname || !v.lastname || !v.motif) { err.textContent = 'Prénom, nom et motif sont obligatoires.'; return; }
+      if (!v.date || !v.time) { err.textContent = 'Choisissez un créneau libre.'; return; }
+      const isMob = isMobilePhone(v.phone);
+      if ((v.sendConfirm || v.sendReminder) && !isMob) { if (!confirm('Téléphone absent ou non mobile : les SMS ne pourront pas être envoyés. Créer quand même le rendez-vous ?')) return; }
+      const go = $('#cr-go'); go.disabled = true; go.textContent = '⏳…';
+      api('/api/rdv-create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) }).then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then((res) => { if (!res.ok) throw new Error((res.j && res.j.error) || 'Erreur'); toast('✓ Rendez-vous créé.' + (v.sendConfirm && isMob ? ' SMS envoyé.' : '')); renderCreate(panel); }).catch((e) => { err.textContent = e.message; go.disabled = false; go.textContent = '📅 Créer le rendez-vous'; });
+    };
+  }).catch(() => { panel.innerHTML = '<p>Erreur de chargement.</p>'; });
 }
 
 async function boot() {

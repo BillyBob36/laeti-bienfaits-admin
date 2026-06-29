@@ -12,12 +12,19 @@ const I = {
   mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>',
   bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 11 14-7v16L3 13z"/><path d="M3 11v3a2 2 0 0 0 2 2h1"/><path d="M9 14v4a2 2 0 0 0 4 0"/></svg>',
   rdv:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M12.5 13.5v2.5l1.8 1"/></svg>',
+  users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
 };
 
 window.LB_SCHEMA = [
   {
     id:'rdv', label:'Rendez-vous', icon:I.rdv, custom:'rdv',
-    intro:"Réglez vos disponibilités pour la réservation en ligne, et traitez les demandes reçues (accepter / refuser).",
+    intro:"Réglez vos disponibilités, créez un RDV vous-même, et traitez les demandes reçues (accepter / refuser).",
+    fields:[],
+  },
+  {
+    id:'patients', label:'Patients', icon:I.users, custom:'patients',
+    intro:"Votre annuaire de patients. Ajoutez/modifiez une fiche, importez ou exportez en CSV. Les patients sont aussi créés automatiquement quand vous prenez un rendez-vous.",
     fields:[],
   },
   {
@@ -84,5 +91,10 @@ window.LB_SCHEMA = [
       { type:'toggle', key:'annonce.enabled', label:'Afficher le bandeau sur le site' },
       { type:'textarea', key:'annonce.text', label:'Message à afficher', rows:2, hint:'Ex. « Cabinet fermé du 1ᵉʳ au 15 août — reprise le 16. »' },
     ],
+  },
+  {
+    id:'sms', label:'Messages SMS', icon:I.chat, custom:'sms',
+    intro:"Personnalisez les SMS automatiques envoyés à vos clients. Variables disponibles : {prenom}, {date}, {heure}, {motif} (remplacées automatiquement).",
+    fields:[],
   },
 ];
