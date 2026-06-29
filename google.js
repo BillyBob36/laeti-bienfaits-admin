@@ -44,13 +44,13 @@ async function getToken() {
 async function createEvent(b) {
   const t = await getToken(); if (!t) return null;
   const ev = {
-    summary: '⏳ DEMANDE — ' + b.name,
-    description: 'Demande de rendez-vous À CONFIRMER.\nClient : ' + b.name + '\nTéléphone : ' + b.phone
+    summary: (b.confirmed ? '✅ RDV — ' : '⏳ DEMANDE — ') + b.name,
+    description: (b.confirmed ? 'Rendez-vous confirmé (créé par Laëtitia).' : 'Demande de rendez-vous À CONFIRMER.') + '\nClient : ' + b.name + '\nTéléphone : ' + b.phone
       + '\nPrestation : ' + (b.prestation || b.motif || '—')
-      + '\n\n👉 Accepter / refuser (et ajuster la durée) :\n' + PUBLIC_BASE + '/r/' + b.token,
+      + (b.confirmed ? '' : '\n\n👉 Accepter / refuser (et ajuster la durée) :\n' + PUBLIC_BASE + '/r/' + b.token),
     start: { dateTime: b.date + 'T' + b.time + ':00', timeZone: TZ },
     end: { dateTime: b.date + 'T' + endTime(b.time, b.durationMin) + ':00', timeZone: TZ },
-    colorId: '5',
+    colorId: b.confirmed ? '10' : '5',
   };
   try {
     const r = await fetch(calUrl(), { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify(ev) });

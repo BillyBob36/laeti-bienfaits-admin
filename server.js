@@ -252,12 +252,14 @@ app.post('/api/bookings/:id', requireAuth, (req, res) => {
   const u = req.body || {};
   if (u.status && ['pending', 'confirmed', 'refused'].indexOf(u.status) >= 0) books[i].status = u.status;
   if (u.durationMin) books[i].durationMin = Math.max(15, parseInt(u.durationMin, 10));
+  if (typeof u.sendReminder === 'boolean') books[i].sendReminder = u.sendReminder;
   if (typeof u.note === 'string') books[i].adminNote = u.note.slice(0, 300);
   writeJson(BOOK_FILE, books, (e) => {
     if (e) return res.status(500).json({ error: 'Échec.' });
-    notifyClient(books[i]); // SMS au client (validé / refusé)
-    if (books[i].status === 'confirmed') google.confirmEvent(books[i]); else if (books[i].status === 'refused') google.deleteEvent(books[i]);
-    res.json({ ok: true, booking: books[i] });
+    const b = books[i];
+    if (b.status === 'confirmed') { if (u.sendConfirm !== false) notifyClient(b, u.customSms); google.confirmEvent(b); }
+    else if (b.status === 'refused') { if (u.sendRefuse !== false) notifyClient(b, u.customSms); google.deleteEvent(b); }
+    res.json({ ok: true, booking: b });
   });
 });
 
@@ -279,6 +281,26 @@ function normPhone(p) {
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function frWhen(b) { const p = b.date.split('-'); return p[2] + '/' + p[1] + '/' + p[0] + ' à ' + b.time; }
 
+// --- Modèles de SMS (éditables par Laetitia depuis la console) ---
+const TPL_FILE = path.join(DATA_DIR, 'sms_templates.json');
+const DEFAULT_TPL = {
+  confirm: "Bonjour {prenom}, votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits est CONFIRME. A bientot !",
+  reminder: "Rappel : votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits, c'est dans 2 jours. A bientot !",
+  refuse: "Bonjour {prenom}, votre demande de RDV du {date} a {heure} n'a pas pu etre retenue. Rappelez le 06 73 96 21 83 pour convenir d'un autre creneau.",
+};
+function smsTemplates() { return Object.assign({}, DEFAULT_TPL, readJson(TPL_FILE, {})); }
+function firstNameOf(b) { return b.firstname || String(b.name || '').trim().split(/\s+/)[0] || ''; }
+function fillTpl(tpl, b) {
+  const p = String(b.date || '').split('-');
+  return String(tpl)
+    .replace(/{prenom}/g, firstNameOf(b))
+    .replace(/{nom}/g, b.lastname || '')
+    .replace(/{date}/g, p[2] ? (p[2] + '/' + p[1] + '/' + p[0]) : '')
+    .replace(/{heure}/g, b.time || '')
+    .replace(/{motif}/g, b.prestation || b.motif || '');
+}
+function isMobileFR(phone) { const d = String(phone || '').replace(/[^0-9+]/g, '').replace(/^\+33/, '0').replace(/^0033/, '0'); return /^0[67]\d{8}$/.test(d); }
+
 async function sendSms(to, text) {
   if (!SMS_API_KEY) { console.warn('[sms] clé API absente — SMS ignoré'); return; }
   try {
@@ -290,9 +312,10 @@ async function sendSms(to, text) {
     if (!r.ok) console.warn('[sms] échec ' + r.status + ' : ' + (await r.text().catch(() => '')));
   } catch (e) { console.warn('[sms] erreur : ' + e.message); }
 }
-function notifyClient(b) {
-  if (b.status === 'confirmed') sendSms(b.phone, "Bonjour " + b.name + ", votre rendez-vous du " + frWhen(b) + " avec Laeti'Bienfaits est CONFIRME. A bientot !");
-  else if (b.status === 'refused') sendSms(b.phone, "Bonjour " + b.name + ", votre demande de RDV du " + frWhen(b) + " n'a pas pu etre retenue. Rappelez le 06 73 96 21 83 pour un autre creneau.");
+function notifyClient(b, customSms) {
+  const tpl = smsTemplates();
+  if (b.status === 'confirmed') sendSms(b.phone, customSms || fillTpl(tpl.confirm, b));
+  else if (b.status === 'refused') sendSms(b.phone, customSms || fillTpl(tpl.refuse, b));
 }
 
 function rdvPage(title, inner) {
@@ -350,17 +373,136 @@ app.post('/r/:token', (req, res) => {
 // Rappels J-2 (vérifié toutes les heures)
 function checkReminders() {
   const books = readJson(BOOK_FILE, []);
+  const tpl = smsTemplates();
   const target = parisParts(new Date(Date.now() + 2 * 86400000)).date;
   let changed = false;
   books.forEach((b) => {
-    if (b.status === 'confirmed' && b.date === target && !b.reminderSent) {
-      sendSms(b.phone, "Rappel : votre rendez-vous avec Laeti'Bienfaits est dans 2 jours, le " + frWhen(b) + ". A bientot !");
+    if (b.status === 'confirmed' && b.date === target && !b.reminderSent && b.sendReminder !== false) {
+      sendSms(b.phone, fillTpl(tpl.reminder, b));
       b.reminderSent = true; changed = true;
     }
   });
   if (changed) writeJson(BOOK_FILE, books, () => {});
 }
 setInterval(checkReminders, 3600 * 1000);
+
+// ============================================================================
+// MESSAGES SMS (modèles éditables) — Lot 1
+// ============================================================================
+app.get('/api/sms-templates', requireAuth, (req, res) => res.json(smsTemplates()));
+app.post('/api/sms-templates', requireAuth, (req, res) => {
+  const b = req.body || {};
+  const out = {
+    confirm: String(b.confirm != null ? b.confirm : DEFAULT_TPL.confirm).slice(0, 480),
+    reminder: String(b.reminder != null ? b.reminder : DEFAULT_TPL.reminder).slice(0, 480),
+    refuse: String(b.refuse != null ? b.refuse : DEFAULT_TPL.refuse).slice(0, 480),
+  };
+  writeJson(TPL_FILE, out, (e) => (e ? res.status(500).json({ error: 'Échec.' }) : res.json({ ok: true })));
+});
+
+// ============================================================================
+// ANNUAIRE PATIENTS — Lot 2
+// ============================================================================
+const PAT_FILE = path.join(DATA_DIR, 'patients.json');
+function newId() { return Date.now().toString(36) + crypto.randomBytes(3).toString('hex'); }
+function phoneKey(p) { return String(p || '').replace(/[^0-9]/g, ''); }
+function upsertPatient(b) {
+  const pats = readJson(PAT_FILE, []);
+  const k = phoneKey(b.phone);
+  let p = k ? pats.find((x) => phoneKey(x.phone) === k) : null;
+  if (!p) { p = { id: newId(), createdAt: new Date().toISOString() }; pats.push(p); }
+  p.firstname = b.firstname || p.firstname || '';
+  p.lastname = b.lastname || p.lastname || '';
+  p.phone = b.phone || p.phone || '';
+  if (b.email) p.email = b.email;
+  if (b.prestation || b.motif) p.motif = b.prestation || b.motif;
+  p.updatedAt = new Date().toISOString();
+  writeJson(PAT_FILE, pats, () => {});
+}
+app.get('/api/patients', requireAuth, (req, res) => res.json(readJson(PAT_FILE, [])));
+app.post('/api/patients', requireAuth, (req, res) => {
+  const b = req.body || {};
+  const pats = readJson(PAT_FILE, []);
+  let p = b.id ? pats.find((x) => x.id === b.id) : null;
+  if (!p) { p = { id: newId(), createdAt: new Date().toISOString() }; pats.push(p); }
+  ['firstname', 'lastname', 'phone', 'email', 'motif', 'notes'].forEach((kk) => { if (b[kk] != null) p[kk] = String(b[kk]).slice(0, 600); });
+  p.updatedAt = new Date().toISOString();
+  writeJson(PAT_FILE, pats, (e) => (e ? res.status(500).json({ error: 'Échec.' }) : res.json({ ok: true, patient: p })));
+});
+app.post('/api/patients/delete', requireAuth, (req, res) => {
+  const id = (req.body || {}).id;
+  const pats = readJson(PAT_FILE, []).filter((x) => x.id !== id);
+  writeJson(PAT_FILE, pats, (e) => (e ? res.status(500).json({ error: 'Échec.' }) : res.json({ ok: true })));
+});
+function csvCell(v) { v = String(v == null ? '' : v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function parseCsvLine(line) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) { const c = line[i];
+    if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else { if (c === '"') q = true; else if (c === ';' || c === ',') { out.push(cur); cur = ''; } else cur += c; } }
+  out.push(cur); return out.map((s) => s.trim());
+}
+app.get('/api/patients/export', requireAuth, (req, res) => {
+  const pats = readJson(PAT_FILE, []);
+  const cols = ['firstname', 'lastname', 'phone', 'email', 'motif', 'notes'];
+  const head = ['Prenom', 'Nom', 'Telephone', 'Email', 'Motif', 'Notes'].join(';');
+  const rows = pats.map((p) => cols.map((c) => csvCell(p[c])).join(';'));
+  res.type('text/csv; charset=utf-8').set('Content-Disposition', 'attachment; filename="patients.csv"').send('﻿' + head + '\n' + rows.join('\n'));
+});
+app.post('/api/patients/import', requireAuth, (req, res) => {
+  const csv = String((req.body || {}).csv || '');
+  const lines = csv.split(/\r?\n/).filter((l) => l.trim());
+  if (!lines.length) return res.json({ ok: true, added: 0, updated: 0 });
+  const pats = readJson(PAT_FILE, []);
+  let added = 0, updated = 0;
+  const start = /pr[ée]nom|firstname|t[ée]l|phone/i.test(lines[0]) ? 1 : 0;
+  for (let i = start; i < lines.length; i++) {
+    const c = parseCsvLine(lines[i]);
+    const firstname = c[0] || '', lastname = c[1] || '', phone = c[2] || '', email = c[3] || '', motif = c[4] || '', notes = c[5] || '';
+    if (!firstname && !lastname && !phone) continue;
+    const k = phoneKey(phone);
+    let p = k ? pats.find((x) => phoneKey(x.phone) === k) : null;
+    if (!p) { p = { id: newId(), createdAt: new Date().toISOString() }; pats.push(p); added++; } else updated++;
+    p.firstname = firstname || p.firstname || ''; p.lastname = lastname || p.lastname || ''; p.phone = phone || p.phone || '';
+    p.email = email || p.email || ''; p.motif = motif || p.motif || ''; p.notes = notes || p.notes || '';
+    p.updatedAt = new Date().toISOString();
+  }
+  writeJson(PAT_FILE, pats, (e) => (e ? res.status(500).json({ error: 'Échec.' }) : res.json({ ok: true, added, updated })));
+});
+
+// ============================================================================
+// CRÉATION DE RDV PAR LAETITIA (confirmé direct) — Lot 3
+// ============================================================================
+app.post('/api/bookings/create', requireAuth, (req, res) => {
+  const b = req.body || {};
+  const firstname = String(b.firstname || '').trim(), lastname = String(b.lastname || '').trim();
+  const phone = String(b.phone || '').trim();
+  const date = String(b.date || '').trim(), time = String(b.time || '').trim();
+  if (!firstname || !lastname || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
+    return res.status(400).json({ error: 'Informations incomplètes ou invalides.' });
+  }
+  const av = readJson(AVAIL_FILE, DEFAULT_AVAIL);
+  const dur = Math.max(15, parseInt(b.duration, 10) || av.defaultDuration || 60);
+  const books = readJson(BOOK_FILE, []);
+  const clash = books.some((x) => (x.status === 'pending' || x.status === 'confirmed') && x.date === date && overlap(hm(x.time), hm(x.time) + (x.durationMin || dur), hm(time), hm(time) + dur));
+  if (clash) return res.status(409).json({ error: "Ce créneau est déjà occupé, choisissez-en un autre." });
+  const rec = {
+    id: newId(), token: crypto.randomBytes(16).toString('hex'),
+    name: (firstname + ' ' + lastname).trim(), firstname, lastname,
+    phone: phone.slice(0, 20), email: String(b.email || '').slice(0, 120),
+    prestation: String(b.prestation || b.motif || '').slice(0, 120), motif: String(b.motif || '').slice(0, 500),
+    date, time, durationMin: dur, status: 'confirmed', source: 'admin',
+    sendReminder: b.sendReminder !== false, createdAt: new Date().toISOString(),
+  };
+  books.push(rec);
+  upsertPatient(rec);
+  writeJson(BOOK_FILE, books, (e) => {
+    if (e) return res.status(500).json({ error: 'Échec.' });
+    if (b.sendConfirm !== false && isMobileFR(rec.phone)) notifyClient(rec, b.customSms);
+    if (google.enabled()) google.createEvent(Object.assign({}, rec, { confirmed: true })).then((id) => { if (id) { const bb = readJson(BOOK_FILE, []); const k = bb.findIndex((x) => x.id === rec.id); if (k >= 0) { bb[k].gcalId = id; writeJson(BOOK_FILE, bb, () => {}); } } });
+    res.json({ ok: true, booking: rec });
+  });
+});
 
 // ---- Statiques -------------------------------------------------------------
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', fallthrough: false }));
