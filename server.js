@@ -473,7 +473,7 @@ app.post('/api/patients/import', requireAuth, (req, res) => {
 // ============================================================================
 // CRÉATION DE RDV PAR LAETITIA (confirmé direct) — Lot 3
 // ============================================================================
-app.post('/api/bookings/create', requireAuth, (req, res) => {
+app.post('/api/rdv-create', requireAuth, (req, res) => {
   const b = req.body || {};
   const firstname = String(b.firstname || '').trim(), lastname = String(b.lastname || '').trim();
   const phone = String(b.phone || '').trim();
