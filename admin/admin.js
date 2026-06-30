@@ -86,16 +86,18 @@ async function downscale(file, maxSide = 1600, quality = 0.82) {
     const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
-    const type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-    const blob = await new Promise((r) => cv.toBlob(r, type, quality));
     bmp.close && bmp.close();
+    // WebP = meilleur rapport qualité/poids (et supprime les métadonnées EXIF) ; repli JPEG si non supporté
+    let blob = await new Promise((r) => cv.toBlob(r, 'image/webp', quality));
+    if (!blob || blob.type !== 'image/webp') blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', quality));
     return blob || file;
   } catch (e) { return file; }
 }
 async function uploadFile(file) {
   const blob = await downscale(file);
+  const t = blob.type || file.type || '';
+  const ext = t === 'image/webp' ? 'webp' : t === 'image/png' ? 'png' : t === 'video/mp4' ? 'mp4' : t === 'image/gif' ? 'gif' : 'jpg';
   const fd = new FormData();
-  const ext = file.type === 'image/png' ? 'png' : file.type === 'video/mp4' ? 'mp4' : 'jpg';
   fd.append('file', blob, (file.name || 'image').replace(/\.[^.]+$/, '') + '.' + ext);
   const res = await api('/api/upload', { method: 'POST', body: fd });
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Échec de l'upload."); }
