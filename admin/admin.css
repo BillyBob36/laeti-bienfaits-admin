@@ -141,6 +141,7 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 .rdv-note{background:var(--cream2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;color:var(--green);font-size:14.5px;line-height:1.6;margin-top:22px;}
 .rdv-note strong{color:var(--terra);}
 /* accordéon des items de liste */
+.list-item.acc:not(.open){padding-top:12px;padding-bottom:12px;}
 .list-item.acc > .list-head{cursor:pointer;user-select:none;gap:8px;margin-bottom:0;}
 .list-item.acc.open > .list-head{margin-bottom:14px;}
 .list-item.acc > .list-head > .list-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:none;font-size:15px;letter-spacing:0;color:var(--green);}
