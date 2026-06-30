@@ -492,13 +492,19 @@ function renderDispo(panel, av) {
 function renderDem(panel, list) {
   panel.innerHTML = '';
   if (!Array.isArray(list) || !list.length) { panel.innerHTML = '<p class="sec-intro">Aucune demande de rendez-vous pour le moment.</p>'; return; }
-  const ord = { pending: 0, confirmed: 1, refused: 2 };
+  const ord = { pending: 0, confirmed: 1, refused: 2, cancelled: 3 };
   list = list.slice().sort((a, b) => (ord[a.status] - ord[b.status]) || ((a.date + a.time) < (b.date + b.time) ? -1 : 1));
   function applyDecision(b, status, durationMin, opts, card) {
     card.style.opacity = '.5';
     api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ status: status, durationMin: durationMin }, opts)) })
-      .then((r) => r.json()).then(() => { toast(status === 'confirmed' ? '✓ RDV confirmé.' : 'Demande refusée.'); b.status = status; if (durationMin) b.durationMin = durationMin; renderDem(panel, list); })
+      .then((r) => r.json()).then(() => { toast(status === 'confirmed' ? '✓ RDV confirmé.' : status === 'cancelled' ? '✓ RDV annulé.' : 'Demande refusée.'); b.status = status; if (durationMin) b.durationMin = durationMin; renderDem(panel, list); })
       .catch(() => { toast('⚠ Échec.', true); card.style.opacity = '1'; });
+  }
+  function cancelRdv(b, card) {
+    const isMob = isMobilePhone(b.phone);
+    api('/api/sms-templates').then((r) => r.json()).then((tpl) => {
+      smsConfirmModal('Annuler le rendez-vous', [{ key: 'cancel', label: 'Prévenir le patient par SMS de l\'annulation', checked: false }], fillSmsPreview(tpl.cancel || '', b), isMob, (s) => applyDecision(b, 'cancelled', null, { sendCancel: !!s.cancel, customSms: s.custom ? s.text : undefined }, card));
+    }).catch(() => applyDecision(b, 'cancelled', null, {}, card));
   }
   function decide(b, status, durationMin, card) {
     const isMob = isMobilePhone(b.phone);
@@ -512,7 +518,7 @@ function renderDem(panel, list) {
   }
   list.forEach((b) => {
     const card = document.createElement('div'); card.className = 'dem dem-' + b.status;
-    const st = b.status === 'pending' ? '<span class="badge wait">En attente</span>' : b.status === 'confirmed' ? '<span class="badge ok">Confirmé</span>' : '<span class="badge no">Refusé</span>';
+    const st = b.status === 'pending' ? '<span class="badge wait">En attente</span>' : b.status === 'confirmed' ? '<span class="badge ok">Confirmé</span>' : b.status === 'cancelled' ? '<span class="badge no">Annulé</span>' : '<span class="badge no">Refusé</span>';
     const when = b.date.split('-').reverse().join('/') + ' à ' + b.time;
     card.innerHTML = '<div class="dem-h"><b>' + esc(b.name) + '</b> ' + st + '</div>'
       + '<div class="dem-i">📞 ' + esc(b.phone) + ' · ' + esc(b.prestation || b.motif || '—') + '</div>'
@@ -526,6 +532,11 @@ function renderDem(panel, list) {
       ok.onclick = () => decide(b, 'confirmed', parseInt(dur.value, 10) || b.durationMin, card);
       no.onclick = () => decide(b, 'refused', null, card);
       act.append(lbl, dur, ok, no); card.appendChild(act);
+    } else if (b.status === 'confirmed') {
+      const act = document.createElement('div'); act.className = 'dem-act';
+      const cx = document.createElement('button'); cx.className = 'dem-no'; cx.textContent = '🗑 Annuler le RDV';
+      cx.onclick = () => cancelRdv(b, card);
+      act.append(cx); card.appendChild(act);
     }
     panel.appendChild(card);
   });
@@ -567,7 +578,7 @@ function renderSms(c) {
   wrap.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>';
   api('/api/sms-templates').then((r) => r.json()).then((tpl) => {
     wrap.innerHTML = '';
-    const defs = [['confirm', 'SMS de confirmation', 'Envoyé quand vous acceptez ou créez un RDV.'], ['reminder', 'SMS de rappel (2 jours avant)', 'Envoyé automatiquement 2 jours avant le RDV.'], ['refuse', 'SMS de refus', 'Envoyé quand vous refusez une demande.']];
+    const defs = [['confirm', 'SMS de confirmation', 'Envoyé quand vous acceptez ou créez un RDV.'], ['reminder', 'SMS de rappel (2 jours avant)', 'Envoyé automatiquement 2 jours avant le RDV.'], ['refuse', 'SMS de refus', 'Envoyé quand vous refusez une demande.'], ['cancel', "SMS d'annulation", 'Proposé (envoi optionnel) quand vous annulez un rendez-vous confirmé.']];
     const tas = {};
     defs.forEach(([k, label, hint]) => {
       const f = document.createElement('div'); f.className = 'field';
@@ -581,7 +592,7 @@ function renderSms(c) {
     hint.textContent = 'Variables : {prenom} {date} {heure} {motif} — remplacées automatiquement à l\'envoi.';
     wrap.appendChild(hint);
     const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '18px'; save.textContent = '💾 Enregistrer les messages';
-    save.onclick = async () => { save.disabled = true; save.textContent = '⏳…'; try { const r = await api('/api/sms-templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: tas.confirm.value, reminder: tas.reminder.value, refuse: tas.refuse.value }) }); if (!r.ok) throw 0; toast('✓ Messages enregistrés.'); } catch (e) { toast('⚠ Échec.', true); } save.disabled = false; save.textContent = '💾 Enregistrer les messages'; };
+    save.onclick = async () => { save.disabled = true; save.textContent = '⏳…'; try { const r = await api('/api/sms-templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: tas.confirm.value, reminder: tas.reminder.value, refuse: tas.refuse.value, cancel: tas.cancel.value }) }); if (!r.ok) throw 0; toast('✓ Messages enregistrés.'); } catch (e) { toast('⚠ Échec.', true); } save.disabled = false; save.textContent = '💾 Enregistrer les messages'; };
     wrap.appendChild(save);
   }).catch(() => { wrap.innerHTML = '<p>Erreur de chargement.</p>'; });
 }

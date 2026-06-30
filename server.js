@@ -263,15 +263,17 @@ app.post('/api/bookings/:id', requireAuth, (req, res) => {
   const i = books.findIndex((x) => x.id === req.params.id);
   if (i < 0) return res.status(404).json({ error: 'Demande introuvable.' });
   const u = req.body || {};
-  if (u.status && ['pending', 'confirmed', 'refused'].indexOf(u.status) >= 0) books[i].status = u.status;
+  if (u.status && ['pending', 'confirmed', 'refused', 'cancelled'].indexOf(u.status) >= 0) books[i].status = u.status;
   if (u.durationMin) books[i].durationMin = Math.max(15, parseInt(u.durationMin, 10));
   if (typeof u.sendReminder === 'boolean') books[i].sendReminder = u.sendReminder;
+  if (books[i].status === 'cancelled') { books[i].reminderSent = true; books[i].sendReminder = false; }
   if (typeof u.note === 'string') books[i].adminNote = u.note.slice(0, 300);
   writeJson(BOOK_FILE, books, (e) => {
     if (e) return res.status(500).json({ error: 'Échec.' });
     const b = books[i];
     if (b.status === 'confirmed') { if (u.sendConfirm !== false) notifyClient(b, u.customSms); google.confirmEvent(b); }
     else if (b.status === 'refused') { if (u.sendRefuse !== false) notifyClient(b, u.customSms); google.deleteEvent(b); }
+    else if (b.status === 'cancelled') { if (u.sendCancel) notifyClient(b, u.customSms); google.deleteEvent(b); }
     res.json({ ok: true, booking: b });
   });
 });
@@ -300,6 +302,7 @@ const DEFAULT_TPL = {
   confirm: "Bonjour {prenom}, votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits est CONFIRME. A bientot !",
   reminder: "Rappel : votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits, c'est dans 2 jours. A bientot !",
   refuse: "Bonjour {prenom}, votre demande de RDV du {date} a {heure} n'a pas pu etre retenue. Rappelez le 06 73 96 21 83 pour convenir d'un autre creneau.",
+  cancel: "Bonjour {prenom}, votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits a ete ANNULE. Pour reprendre RDV, appelez le 06 73 96 21 83. A bientot !",
 };
 function smsTemplates() { return Object.assign({}, DEFAULT_TPL, readJson(TPL_FILE, {})); }
 function firstNameOf(b) { return b.firstname || String(b.name || '').trim().split(/\s+/)[0] || ''; }
@@ -329,6 +332,7 @@ function notifyClient(b, customSms) {
   const tpl = smsTemplates();
   if (b.status === 'confirmed') sendSms(b.phone, customSms || fillTpl(tpl.confirm, b));
   else if (b.status === 'refused') sendSms(b.phone, customSms || fillTpl(tpl.refuse, b));
+  else if (b.status === 'cancelled') sendSms(b.phone, customSms || fillTpl(tpl.cancel, b));
 }
 
 function rdvPage(title, inner) {
@@ -409,6 +413,7 @@ app.post('/api/sms-templates', requireAuth, (req, res) => {
     confirm: String(b.confirm != null ? b.confirm : DEFAULT_TPL.confirm).slice(0, 480),
     reminder: String(b.reminder != null ? b.reminder : DEFAULT_TPL.reminder).slice(0, 480),
     refuse: String(b.refuse != null ? b.refuse : DEFAULT_TPL.refuse).slice(0, 480),
+    cancel: String(b.cancel != null ? b.cancel : DEFAULT_TPL.cancel).slice(0, 480),
   };
   writeJson(TPL_FILE, out, (e) => (e ? res.status(500).json({ error: 'Échec.' }) : res.json({ ok: true })));
 });
