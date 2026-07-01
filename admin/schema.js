@@ -14,6 +14,7 @@ const I = {
   rdv:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M12.5 13.5v2.5l1.8 1"/></svg>',
   users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  help:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>',
 };
 
 window.LB_SCHEMA = [
@@ -59,6 +60,16 @@ window.LB_SCHEMA = [
     intro:"La liste de vos formations, certifications et qualifications, affichée sur votre page « Qui suis-je ».",
     fields:[
       { type:'list', key:'formations.items', label:'Formations / qualifications', itemLabel:'Ligne', item:'text' },
+    ],
+  },
+  {
+    id:'faq', label:'FAQ', icon:I.help,
+    intro:"Les questions/réponses affichées dans la section FAQ de votre site. Ajoutez (＋), réordonnez (↑↓) ou supprimez (🗑) une question. Répondez de façon factuelle et rassurante.",
+    fields:[
+      { type:'list', key:'faq.items', label:'Questions / réponses', itemLabel:'Question', item:[
+        { type:'text', key:'q', label:'Question' },
+        { type:'textarea', key:'a', label:'Réponse', rows:4 },
+      ]},
     ],
   },
   {

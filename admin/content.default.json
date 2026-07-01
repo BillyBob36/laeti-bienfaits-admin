@@ -4,24 +4,56 @@
       {
         "title": "Tarifs des consultations – chemin vers l'équilibre",
         "items": [
-          { "name": "Bilan naturopathique", "duration": "", "price": "60 €" },
-          { "name": "Kinésiologie instinctive", "duration": "1h30 – 2h00", "price": "65 €" }
+          {
+            "name": "Bilan naturopathique",
+            "duration": "",
+            "price": "60 €"
+          },
+          {
+            "name": "Kinésiologie instinctive",
+            "duration": "1h30 – 2h00",
+            "price": "65 €"
+          }
         ]
       },
       {
         "title": "Tarifs des prestations – soins corps et âme",
         "items": [
-          { "name": "Massage Signature Laeti'Bienfaits", "duration": "45 min – 1h00", "price": "60 €" },
-          { "name": "Aromatouch Technique", "duration": "45 min", "price": "70 €" },
-          { "name": "Soin au Bol Chantant", "duration": "1h00", "price": "70 €" }
+          {
+            "name": "Massage Signature Laeti'Bienfaits",
+            "duration": "45 min – 1h00",
+            "price": "60 €"
+          },
+          {
+            "name": "Aromatouch Technique",
+            "duration": "45 min",
+            "price": "70 €"
+          },
+          {
+            "name": "Soin au Bol Chantant",
+            "duration": "1h00",
+            "price": "70 €"
+          }
         ]
       },
       {
         "title": "Tarifs des prestations – soins détente, thérapeutique",
         "items": [
-          { "name": "Massage Moxibustion", "duration": "45 min", "price": "60 €" },
-          { "name": "Réflexologie Plantaire", "duration": "45 min", "price": "55 €" },
-          { "name": "Massage Californien", "duration": "1h30", "price": "90 €" }
+          {
+            "name": "Massage Moxibustion",
+            "duration": "45 min",
+            "price": "60 €"
+          },
+          {
+            "name": "Réflexologie Plantaire",
+            "duration": "45 min",
+            "price": "55 €"
+          },
+          {
+            "name": "Massage Californien",
+            "duration": "1h30",
+            "price": "90 €"
+          }
         ]
       }
     ]
@@ -79,5 +111,37 @@
   "annonce": {
     "enabled": false,
     "text": ""
+  },
+  "faq": {
+    "items": [
+      {
+        "q": "Comment se déroule une première consultation de naturopathie ?",
+        "a": "La première consultation commence par un échange approfondi sur votre mode de vie, votre alimentation et vos objectifs. Mon approche est globale et personnalisée : je vous propose ensuite des conseils naturels adaptés à vos besoins."
+      },
+      {
+        "q": "Comment se déroule une séance de kinésiologie ?",
+        "a": "Les séances se déroulent allongé ou assis, et entièrement habillé. La kinésiologie s'adresse à tout le monde et à tous les âges."
+      },
+      {
+        "q": "À qui s'adressent la naturopathie et la kinésiologie ?",
+        "a": "À tout le monde et à tous les âges — enfants, adultes et seniors — pour accompagner de nombreuses problématiques du quotidien : stress, sommeil, digestion, bien-être émotionnel…"
+      },
+      {
+        "q": "Proposez-vous des consultations à domicile ?",
+        "a": "Oui. Des consultations à domicile sont possibles pour les personnes dans l'incapacité de se déplacer, dans un secteur situé à une dizaine de minutes de Commercy et de Ligny-en-Barrois (secteur de Toul)."
+      },
+      {
+        "q": "Où se trouve le cabinet et quels sont les horaires ?",
+        "a": "Le cabinet est situé au 37 rue Dom Calmet, 55190 Ménil-la-Horgne. Les consultations se font uniquement sur rendez-vous, du mardi au samedi."
+      },
+      {
+        "q": "Comment prendre rendez-vous ?",
+        "a": "Vous pouvez faire une demande de rendez-vous directement en ligne via le bouton « Prendre rendez-vous », ou par téléphone au 06 73 96 21 83."
+      },
+      {
+        "q": "La naturopathie remplace-t-elle un suivi médical ?",
+        "a": "Non. La naturopathie est une approche complémentaire de bien-être : elle ne se substitue pas à un avis, un diagnostic ou un traitement médical."
+      }
+    ]
   }
 }
