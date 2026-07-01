@@ -524,9 +524,16 @@ app.post('/api/rdv-create', requireAuth, (req, res) => {
 
 // ---- Statiques -------------------------------------------------------------
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', fallthrough: false }));
+// La console admin n'est servie que sur le domaine canonique. Ailleurs (ancien sous-domaine
+// laeti-admin.lamidetlm.com, conservé pour /api /uploads /r) -> 301 vers laeti-bienfaits.fr/admin/.
+function adminCanonicalHost(req) { return (req.headers.host || '').toLowerCase().indexOf('laeti-bienfaits.fr') !== -1; }
+app.use('/admin', (req, res, next) => {
+  if (req.headers.host && !adminCanonicalHost(req)) return res.redirect(301, 'https://laeti-bienfaits.fr' + req.originalUrl);
+  next();
+});
 app.use('/admin', express.static(path.join(__dirname, 'admin'), { extensions: ['html'] }));
 app.get('/api/health', (req, res) => res.json({ ok: true }));
-app.get('/', (req, res) => res.redirect('/admin/'));
+app.get('/', (req, res) => res.redirect(req.headers.host && !adminCanonicalHost(req) ? 'https://laeti-bienfaits.fr/admin/' : '/admin/'));
 
 app.listen(PORT, () => {
   console.log('[laeti-admin] écoute sur :' + PORT + ' — données dans ' + DATA_DIR);
