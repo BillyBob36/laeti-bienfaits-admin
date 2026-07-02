@@ -205,21 +205,31 @@ app.get('/api/slots', async (req, res) => {
     });
   }
   const out = [];
+  const FIXED = [570, 660, 840, 930]; // créneaux fixes : 09:30, 11:00, 14:00, 15:30
+  const PAIRS = [[570, 660], [840, 930]]; // [1er, 2e] de chaque demi-journée : le 2e se décale si le 1er déborde
   let cur = fromDate, guard = 0;
   while (cur <= toDate && guard < 400) {
     const ds = cur; cur = nextDate(cur); guard++;
     if ((av.blockedDates || []).indexOf(ds) >= 0) continue;
     const windows = (av.weekly && av.weekly[String(dowOf(ds))]) || [];
     if (!windows.length) continue;
+    const wins = windows.map((w) => ({ s: hm(w.start), e: hm(w.end) }));
+    const inWin = (t) => wins.some((w) => w.s <= t && t < w.e);
+    const bkDay = taken.filter((b) => b.date === ds).map((b) => ({ s: hm(b.time), e: hm(b.time) + (b.durationMin || dur) }));
+    // Le 2e créneau d'une demi-journée se décale si le RDV du 1er déborde (ex. 14h en 120 min -> 15h30 devient 16h).
+    let cands = FIXED.slice();
+    PAIRS.forEach((p) => {
+      const bk = bkDay.find((b) => b.s === p[0]);
+      if (bk && bk.e > p[1]) { cands = cands.filter((x) => x !== p[1]); cands.push(bk.e); }
+    });
     const slots = [];
-    windows.forEach((w) => {
-      const we = hm(w.end);
-      for (let t = hm(w.start); t + dur <= we; t += (av.slotInterval || 30)) {
-        if (ds === now.date && t < now.minutes + (av.minNoticeHours || 0) * 60) continue;
-        if (taken.some((b) => b.date === ds && overlap(hm(b.time), hm(b.time) + (b.durationMin || dur), t, t + dur))) continue;
-        if (busyClash(ds, t, dur)) continue;
-        slots.push(pad(t));
-      }
+    cands.sort((a, b) => a - b).forEach((t) => {
+      if (!inWin(t)) return;
+      if (ds === now.date && t < now.minutes + (av.minNoticeHours || 0) * 60) return;
+      if (bkDay.some((b) => overlap(b.s, b.e, t, t + dur))) return;
+      if (busyClash(ds, t, dur)) return;
+      const p = pad(t);
+      if (slots.indexOf(p) < 0) slots.push(p);
     });
     if (slots.length) out.push({ date: ds, slots });
   }
