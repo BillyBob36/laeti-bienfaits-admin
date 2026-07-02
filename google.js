@@ -46,7 +46,8 @@ async function createEvent(b) {
   const ev = {
     summary: (b.confirmed ? '✅ RDV — ' : '⏳ DEMANDE — ') + b.name,
     description: (b.confirmed ? 'Rendez-vous confirmé (créé par Laëtitia).' : 'Demande de rendez-vous À CONFIRMER.') + '\nClient : ' + b.name + '\nTéléphone : ' + b.phone
-      + '\nPrestation : ' + (b.prestation || b.motif || '—')
+      + '\nPrestation : ' + (b.prestation || '—')
+      + (b.motif && b.motif !== b.prestation ? '\nMotif du client : ' + b.motif : '')
       + (b.confirmed ? '' : '\n\n👉 Accepter / refuser (et ajuster la durée) :\n' + PUBLIC_BASE + '/r/' + b.token),
     start: { dateTime: b.date + 'T' + b.time + ':00', timeZone: TZ },
     end: { dateTime: b.date + 'T' + endTime(b.time, b.durationMin) + ':00', timeZone: TZ },
@@ -88,4 +89,32 @@ async function busyRanges(fromISO, toISO) {
   } catch (e) { console.warn('[google] freeBusy err : ' + e.message); return []; }
 }
 
-module.exports = { enabled, createEvent, confirmEvent, deleteEvent, busyRanges };
+// Jours entièrement bloqués = événements « journée entière » dans l'agenda (congés, absences…),
+// que freeBusy ignore quand ils sont marqués « Disponible ». On les récupère via events.list.
+function nextISODate(ds) { const d = new Date(ds + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); }
+let bdcache = { key: '', at: 0, val: [] };
+async function blockedDays(fromISO, toISO) {
+  if (!enabled()) return [];
+  const key = fromISO + '|' + toISO;
+  if (bdcache.key === key && Date.now() - bdcache.at < 60000) return bdcache.val;
+  const t = await getToken(); if (!t) return [];
+  try {
+    const url = calUrl() + '?singleEvents=true&showDeleted=false&maxResults=2500&timeMin=' + encodeURIComponent(fromISO) + '&timeMax=' + encodeURIComponent(toISO);
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + t } });
+    const j = await r.json();
+    const days = new Set();
+    (j.items || []).forEach((ev) => {
+      if (ev.status === 'cancelled') return;
+      if (ev.start && ev.start.date) { // journée entière (start.date au lieu de start.dateTime)
+        let d = ev.start.date; const endEx = (ev.end && ev.end.date) || nextISODate(d); // end.date exclusif
+        let g = 0;
+        while (d < endEx && g < 400) { days.add(d); d = nextISODate(d); g++; }
+      }
+    });
+    const val = Array.from(days);
+    bdcache = { key: key, at: Date.now(), val: val };
+    return val;
+  } catch (e) { console.warn('[google] blockedDays err : ' + e.message); return []; }
+}
+
+module.exports = { enabled, createEvent, confirmEvent, deleteEvent, busyRanges, blockedDays };

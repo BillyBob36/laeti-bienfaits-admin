@@ -198,6 +198,11 @@ app.get('/api/slots', async (req, res) => {
       busyLocal = busy.map((r) => { const s = parisParts(new Date(r.start)), e = parisParts(new Date(r.end)); return { sd: s.date, sm: s.minutes, ed: e.date, em: e.minutes }; });
     } catch (e) { busyLocal = []; }
   }
+  // Jours entièrement bloqués (événements « journée entière » de l'agenda : congés, absences…)
+  let gBlocked = [];
+  if (google.enabled()) {
+    try { gBlocked = await google.blockedDays(new Date(fromDate + 'T00:00:00Z').toISOString(), new Date(toDate + 'T23:59:59Z').toISOString()); } catch (e) { gBlocked = []; }
+  }
   function busyClash(ds, t, d) {
     return busyLocal.some((b) => {
       if (b.sd === ds && b.ed === ds) return overlap(b.sm, b.em, t, t + d);
@@ -210,7 +215,7 @@ app.get('/api/slots', async (req, res) => {
   let cur = fromDate, guard = 0;
   while (cur <= toDate && guard < 400) {
     const ds = cur; cur = nextDate(cur); guard++;
-    if ((av.blockedDates || []).indexOf(ds) >= 0) continue;
+    if ((av.blockedDates || []).indexOf(ds) >= 0 || gBlocked.indexOf(ds) >= 0) continue;
     const windows = (av.weekly && av.weekly[String(dowOf(ds))]) || [];
     if (!windows.length) continue;
     const wins = windows.map((w) => ({ s: hm(w.start), e: hm(w.end) }));
