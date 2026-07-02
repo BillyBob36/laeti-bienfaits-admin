@@ -239,16 +239,21 @@ app.post('/api/booking', (req, res) => {
   const books = readJson(BOOK_FILE, []);
   const clash = books.some((x) => (x.status === 'pending' || x.status === 'confirmed') && x.date === date && overlap(hm(x.time), hm(x.time) + (x.durationMin || dur), hm(time), hm(time) + dur));
   if (clash) return res.status(409).json({ error: "Ce créneau vient d'être pris, merci d'en choisir un autre." });
+  let firstname = String(b.firstname || '').trim(), lastname = String(b.lastname || '').trim();
+  if (!firstname && name) { const _p = name.split(/\s+/); firstname = _p.shift() || ''; if (!lastname) lastname = _p.join(' '); }
+  const email = String(b.email || '').trim();
   const rec = {
     id: Date.now().toString(36) + crypto.randomBytes(3).toString('hex'),
     token: crypto.randomBytes(16).toString('hex'),
-    name: name.slice(0, 80), phone: phone.slice(0, 20),
+    name: name.slice(0, 80), firstname: firstname.slice(0, 60), lastname: lastname.slice(0, 60),
+    phone: phone.slice(0, 20), email: email.slice(0, 120),
     prestation: String(b.prestation || '').slice(0, 120), motif: String(b.motif || '').slice(0, 500),
     date, time, durationMin: dur, status: 'pending', createdAt: new Date().toISOString(),
   };
   books.push(rec);
   writeJson(BOOK_FILE, books, (e) => {
     if (e) return res.status(500).json({ error: 'Échec.' });
+    upsertPatient(rec); // alimente l'annuaire patients avec les rendez-vous pris en ligne
     // Laetitia est notifiée par Google Agenda (événement « ⏳ DEMANDE » + email « nouveaux événements ») — plus de SMS pour elle.
     if (google.enabled()) google.createEvent(rec).then(function (id) { if (id) { const bb = readJson(BOOK_FILE, []); const k = bb.findIndex((x) => x.id === rec.id); if (k >= 0) { bb[k].gcalId = id; writeJson(BOOK_FILE, bb, () => {}); } } });
     res.json({ ok: true });
