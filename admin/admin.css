@@ -225,3 +225,5 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 /* Aide notifications bloquées */
 .push-help{margin:8px 0 4px;padding-left:20px;font-size:13.5px;color:var(--muted,#5c6b52);line-height:1.55;}
 .push-help li{margin-bottom:6px;}
+
+.push-btn:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(1);}

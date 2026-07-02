@@ -209,18 +209,37 @@ async function setupNotifications() {
   renderPushCta(cta, { subscribed: subscribed, installed: installed, canInstall: !!lbDeferredPrompt });
 }
 function renderPushCta(cta, st) {
-  var btns = '';
-  if (!st.subscribed) btns += '<button class="push-btn" id="push-enable">🔔 Activer les notifications</button>';
-  if (!st.installed && st.canInstall) btns += '<button class="push-btn push-btn-2" id="push-install">📲 Installer l\'application</button>';
-  if (!btns) { cta.innerHTML = ''; return; }
-  var msg = st.subscribed ? 'Ajoutez l\'application à votre écran d\'accueil pour un accès rapide.' : 'Soyez prévenue sur ce téléphone à chaque nouvelle demande de rendez-vous.';
-  cta.innerHTML = '<div class="push-banner"><div class="push-txt"><b>Restez alertée des réservations</b><br><span>' + msg + '</span></div>'
+  // Application installée ET notifications déjà activées → rien à afficher
+  if (st.installed && st.subscribed) { cta.innerHTML = ''; return; }
+
+  var title, msg, btns = '';
+  if (!st.installed) {
+    // Étape 1 : dans le navigateur — installer d'abord, activer ensuite (grisé)
+    title = 'Installez l\'application (étape 1)';
+    msg = 'Installez d\'abord l\'application. Les notifications s\'activeront ensuite, une fois l\'app ouverte depuis l\'écran d\'accueil.';
+    btns += '<button class="push-btn" id="push-install">📲 Installer l\'application</button>';
+    btns += '<button class="push-btn push-btn-2" id="push-enable" disabled title="Disponible une fois l\'application installée">🔔 Activer les notifications</button>';
+  } else {
+    // Étape 2 : app installée, pas encore abonnée
+    title = 'Activez les notifications (étape 2)';
+    msg = 'Soyez prévenue sur ce téléphone à chaque nouvelle demande de rendez-vous.';
+    btns += '<button class="push-btn" id="push-enable">🔔 Activer les notifications</button>';
+  }
+  cta.innerHTML = '<div class="push-banner"><div class="push-txt"><b>' + title + '</b><br><span>' + msg + '</span></div>'
     + '<div class="push-actions">' + btns + '</div></div>';
-  var be = document.getElementById('push-enable'); if (be) be.onclick = enablePush;
+  var be = document.getElementById('push-enable'); if (be && !be.disabled) be.onclick = enablePush;
   var bi = document.getElementById('push-install'); if (bi) bi.onclick = doInstall;
 }
+function showInstallHelp() {
+  var cta = document.getElementById('push-cta'); if (!cta) return;
+  cta.innerHTML = '<div class="push-banner" style="flex-direction:column;align-items:flex-start;text-align:left;">'
+    + '<div class="push-txt"><b>Ajoutez l\'application à l\'écran d\'accueil</b></div>'
+    + '<ul class="push-help"><li><b>Android (Chrome) :</b> menu <b>⋮</b> en haut à droite → <b>Ajouter à l\'écran d\'accueil</b> → <b>Installer</b>.</li>'
+    + '<li><b>iPhone (Safari) :</b> bouton <b>Partager</b> (carré + flèche) → <b>Sur l\'écran d\'accueil</b>.</li></ul>'
+    + '<div class="push-txt"><span>Ouvrez ensuite l\'application depuis son icône, puis activez les notifications.</span></div></div>';
+}
 async function doInstall() {
-  if (!lbDeferredPrompt) return;
+  if (!lbDeferredPrompt) { showInstallHelp(); return; }
   lbDeferredPrompt.prompt();
   try { await lbDeferredPrompt.userChoice; } catch (e) {}
   lbDeferredPrompt = null; setupNotifications();
