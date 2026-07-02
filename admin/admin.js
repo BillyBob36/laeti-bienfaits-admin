@@ -270,6 +270,7 @@ function showPushHelp() {
     + '<div class="push-txt"><b>Les notifications sont bloquées sur cet appareil</b><br><span>Pour les réautoriser :</span></div>'
     + '<ul class="push-help"><li><b>Android :</b> appui long sur l\'icône « Laëti Admin » → <b>Infos sur l\'appli</b> → <b>Notifications</b> → activez.</li>'
     + '<li><b>iPhone :</b> Réglages → descendez jusqu\'à <b>Laëti Admin</b> → <b>Notifications</b> → activez (iOS 16.4 minimum).</li></ul>'
+    + '<div class="push-txt" style="margin-top:2px;"><span>Ensuite, <b>fermez complètement l\'application et rouvrez-la</b>, puis appuyez sur le bouton ci-dessous.</span></div>'
     + '<div class="push-actions"><button class="push-btn" id="push-enable">🔔 J\'ai activé, réessayer</button></div></div>';
   var be = document.getElementById('push-enable'); if (be) be.onclick = enablePush;
 }
