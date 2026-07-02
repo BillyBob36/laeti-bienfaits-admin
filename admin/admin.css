@@ -221,3 +221,7 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 .push-btn-2{background:#fff;color:var(--green);border:1px solid var(--sage-bd);}
 .push-btn-2:hover{background:#f4f6f2;}
 @media(max-width:560px){.push-banner{margin:12px 16px 0;flex-direction:column;align-items:stretch;text-align:center;}.push-actions{flex-direction:column;}.push-btn{width:100%;}}
+
+/* Aide notifications bloquées */
+.push-help{margin:8px 0 4px;padding-left:20px;font-size:13.5px;color:var(--muted,#5c6b52);line-height:1.55;}
+.push-help li{margin-bottom:6px;}
