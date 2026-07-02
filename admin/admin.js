@@ -161,6 +161,7 @@ function renderApp() {
             <button class="btn-save" id="btn-save">💾 Enregistrer</button>
           </div>
         </header>
+        <div id="push-cta"></div>
         <main class="content" id="content"></main>
       </div>
       <div class="scrim" id="scrim"></div>
@@ -179,6 +180,65 @@ function renderApp() {
   renderNav();
   selectSection(State.schema[0].id);
   window.addEventListener('beforeunload', (e) => { if (State.dirty) { e.preventDefault(); e.returnValue = ''; } });
+  setupNotifications();
+}
+
+/* ---------- Notifications push (application installable) ----------------- */
+var lbDeferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); lbDeferredPrompt = e; try { setupNotifications(); } catch (_) {} });
+window.addEventListener('appinstalled', function () { lbDeferredPrompt = null; try { setupNotifications(); } catch (_) {} });
+function urlB64ToU8(s) {
+  var pad = '='.repeat((4 - s.length % 4) % 4);
+  var b64 = (s + pad).replace(/-/g, '+').replace(/_/g, '/');
+  var raw = atob(b64), arr = new Uint8Array(raw.length);
+  for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+async function setupNotifications() {
+  var cta = document.getElementById('push-cta'); if (!cta) return;
+  var supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+  if (!supported) { cta.innerHTML = ''; return; }
+  var installed = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  var subscribed = false;
+  try {
+    var reg = await navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' });
+    await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    subscribed = !!sub && Notification.permission === 'granted';
+  } catch (e) {}
+  renderPushCta(cta, { subscribed: subscribed, installed: installed, canInstall: !!lbDeferredPrompt });
+}
+function renderPushCta(cta, st) {
+  var btns = '';
+  if (!st.subscribed) btns += '<button class="push-btn" id="push-enable">🔔 Activer les notifications</button>';
+  if (!st.installed && st.canInstall) btns += '<button class="push-btn push-btn-2" id="push-install">📲 Installer l\'application</button>';
+  if (!btns) { cta.innerHTML = ''; return; }
+  var msg = st.subscribed ? 'Ajoutez l\'application à votre écran d\'accueil pour un accès rapide.' : 'Soyez prévenue sur ce téléphone à chaque nouvelle demande de rendez-vous.';
+  cta.innerHTML = '<div class="push-banner"><div class="push-txt"><b>Restez alertée des réservations</b><br><span>' + msg + '</span></div>'
+    + '<div class="push-actions">' + btns + '</div></div>';
+  var be = document.getElementById('push-enable'); if (be) be.onclick = enablePush;
+  var bi = document.getElementById('push-install'); if (bi) bi.onclick = doInstall;
+}
+async function doInstall() {
+  if (!lbDeferredPrompt) return;
+  lbDeferredPrompt.prompt();
+  try { await lbDeferredPrompt.userChoice; } catch (e) {}
+  lbDeferredPrompt = null; setupNotifications();
+}
+async function enablePush() {
+  try {
+    var perm = await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Notifications non autorisées. Vous pouvez réessayer via les réglages du navigateur.', true); return; }
+    var reg = await navigator.serviceWorker.ready;
+    var key = (await (await fetch(API + '/api/push/key')).text()).trim();
+    if (!key) { toast('Notifications indisponibles pour le moment.', true); return; }
+    var sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToU8(key) });
+    var r = await api('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
+    if (!r.ok) throw new Error();
+    await api('/api/push/test', { method: 'POST' });
+    toast('✓ Notifications activées ! Une notification de test vient d\'être envoyée.');
+    setupNotifications();
+  } catch (e) { toast('Impossible d\'activer les notifications ici.', true); }
 }
 
 function renderNav() {

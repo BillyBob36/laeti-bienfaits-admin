@@ -19,11 +19,18 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 const google = require('./google');
+const webpush = require('web-push');
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const CONTENT_FILE = path.join(DATA_DIR, 'content.json');
+const PUSH_FILE = path.join(DATA_DIR, 'push_subs.json');
+// Notifications push (Web Push / VAPID). Désactivé tant que les clés ne sont pas définies -> no-op.
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC || '';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE || '';
+const pushEnabled = () => !!(VAPID_PUBLIC && VAPID_PRIVATE);
+if (pushEnabled()) { try { webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:laetibienfaits@gmail.com', VAPID_PUBLIC, VAPID_PRIVATE); } catch (e) { console.warn('[push] VAPID KO : ' + e.message); } }
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'laeti';
 // Secret de signature des jetons. Dérivé du mot de passe si non fourni, pour que
 // changer le mot de passe invalide aussi les anciennes sessions.
@@ -269,6 +276,7 @@ app.post('/api/booking', (req, res) => {
   writeJson(BOOK_FILE, books, (e) => {
     if (e) return res.status(500).json({ error: 'Échec.' });
     upsertPatient(rec); // alimente l'annuaire patients avec les rendez-vous pris en ligne
+    sendPush('🗓️ Nouvelle demande de RDV', rec.name + ' — ' + frWhen(rec) + (rec.motif ? ' · ' + rec.motif : ''), '/admin/'); // notif appli Laetitia
     // Laetitia est notifiée par Google Agenda (événement « ⏳ DEMANDE » + email « nouveaux événements ») — plus de SMS pour elle.
     if (google.enabled()) google.createEvent(rec).then(function (id) { if (id) { const bb = readJson(BOOK_FILE, []); const k = bb.findIndex((x) => x.id === rec.id); if (k >= 0) { bb[k].gcalId = id; writeJson(BOOK_FILE, bb, () => {}); } } });
     res.json({ ok: true });
@@ -541,6 +549,35 @@ app.post('/api/rdv-create', requireAuth, (req, res) => {
     res.json({ ok: true, booking: rec });
   });
 });
+
+// ============================================================================
+// Notifications push (Web Push / VAPID) — alerte Laetitia à chaque nouvelle demande
+// ============================================================================
+app.get('/api/push/key', (req, res) => res.type('text/plain').send(VAPID_PUBLIC || ''));
+app.get('/api/push/status', requireAuth, (req, res) => res.json({ enabled: pushEnabled(), count: readJson(PUSH_FILE, []).length }));
+app.post('/api/push/subscribe', requireAuth, (req, res) => {
+  const sub = req.body;
+  if (!sub || !sub.endpoint) return res.status(400).json({ error: 'Abonnement invalide.' });
+  const subs = readJson(PUSH_FILE, []);
+  if (!subs.some((s) => s.endpoint === sub.endpoint)) subs.push(sub);
+  writeJson(PUSH_FILE, subs, (e) => (e ? res.status(500).json({ error: 'Échec.' }) : res.json({ ok: true })));
+});
+app.post('/api/push/test', requireAuth, async (req, res) => {
+  await sendPush('🔔 Notifications activées', 'Vous serez prévenue ici à chaque nouvelle demande de rendez-vous.', '/admin/');
+  res.json({ ok: true });
+});
+async function sendPush(title, body, url) {
+  if (!pushEnabled()) return;
+  const subs = readJson(PUSH_FILE, []);
+  if (!subs.length) return;
+  const payload = JSON.stringify({ title: title, body: body, url: url || '/admin/' });
+  const keep = [];
+  await Promise.all(subs.map(async (s) => {
+    try { await webpush.sendNotification(s, payload); keep.push(s); }
+    catch (e) { const c = e && e.statusCode; if (c !== 404 && c !== 410) keep.push(s); } // 404/410 = abonnement expiré -> retiré
+  }));
+  if (keep.length !== subs.length) writeJson(PUSH_FILE, keep, () => {});
+}
 
 // ---- Statiques -------------------------------------------------------------
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', fallthrough: false }));
