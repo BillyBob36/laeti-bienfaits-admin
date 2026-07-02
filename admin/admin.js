@@ -227,8 +227,13 @@ async function doInstall() {
 }
 async function enablePush() {
   try {
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      toast('Ce navigateur ne gère pas les notifications. Sur Android, ouvrez l\'app installée (Chrome).', true); return;
+    }
+    if (Notification.permission === 'denied') { showPushHelp(); return; }
     var perm = await Notification.requestPermission();
-    if (perm !== 'granted') { toast('Notifications non autorisées. Vous pouvez réessayer via les réglages du navigateur.', true); return; }
+    if (perm === 'denied') { showPushHelp(); return; }
+    if (perm !== 'granted') { toast('Réappuyez sur « Activer » puis choisissez « Autoriser » dans la fenêtre qui apparaît.', true); return; }
     var reg = await navigator.serviceWorker.ready;
     var key = (await (await fetch(API + '/api/push/key')).text()).trim();
     if (!key) { toast('Notifications indisponibles pour le moment.', true); return; }
@@ -238,7 +243,16 @@ async function enablePush() {
     await api('/api/push/test', { method: 'POST' });
     toast('✓ Notifications activées ! Une notification de test vient d\'être envoyée.');
     setupNotifications();
-  } catch (e) { toast('Impossible d\'activer les notifications ici.', true); }
+  } catch (e) { toast('Impossible d\'activer les notifications (' + (e && e.message ? e.message : 'erreur') + ').', true); }
+}
+function showPushHelp() {
+  var cta = document.getElementById('push-cta'); if (!cta) return;
+  cta.innerHTML = '<div class="push-banner" style="flex-direction:column;align-items:flex-start;text-align:left;">'
+    + '<div class="push-txt"><b>Les notifications sont bloquées sur cet appareil</b><br><span>Pour les réautoriser :</span></div>'
+    + '<ul class="push-help"><li><b>Android :</b> appui long sur l\'icône « Laëti Admin » → <b>Infos sur l\'appli</b> → <b>Notifications</b> → activez.</li>'
+    + '<li><b>iPhone :</b> Réglages → descendez jusqu\'à <b>Laëti Admin</b> → <b>Notifications</b> → activez (iOS 16.4 minimum).</li></ul>'
+    + '<div class="push-actions"><button class="push-btn" id="push-enable">🔔 J\'ai activé, réessayer</button></div></div>';
+  var be = document.getElementById('push-enable'); if (be) be.onclick = enablePush;
 }
 
 function renderNav() {
