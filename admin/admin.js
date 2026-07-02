@@ -523,7 +523,8 @@ function renderDem(panel, list) {
     const st = b.status === 'pending' ? '<span class="badge wait">En attente</span>' : b.status === 'confirmed' ? '<span class="badge ok">Confirmé</span>' : b.status === 'cancelled' ? '<span class="badge no">Annulé</span>' : '<span class="badge no">Refusé</span>';
     const when = b.date.split('-').reverse().join('/') + ' à ' + b.time;
     card.innerHTML = '<div class="dem-h"><b>' + esc(b.name) + '</b> ' + st + '</div>'
-      + '<div class="dem-i">📞 ' + esc(b.phone) + ' · ' + esc(b.prestation || b.motif || '—') + '</div>'
+      + '<div class="dem-i">📞 ' + esc(b.phone) + ' · ' + esc(b.prestation || '—') + '</div>'
+      + (b.motif && b.motif !== b.prestation ? '<div class="dem-i" style="font-style:italic;color:#4a5744">📝 ' + esc(b.motif) + '</div>' : '')
       + '<div class="dem-w">🗓 ' + when + ' · ' + b.durationMin + ' min</div>';
     if (b.status === 'pending') {
       const act = document.createElement('div'); act.className = 'dem-act';
