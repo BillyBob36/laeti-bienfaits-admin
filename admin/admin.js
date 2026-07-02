@@ -185,6 +185,7 @@ function renderApp() {
 
 /* ---------- Notifications push (application installable) ----------------- */
 var lbDeferredPrompt = null;
+var lbIsMobile = true; // téléphone/tablette (pointeur tactile) vs ordinateur — met à jour le tuto affiché
 window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); lbDeferredPrompt = e; try { setupNotifications(); } catch (_) {} });
 window.addEventListener('appinstalled', function () { lbDeferredPrompt = null; try { setupNotifications(); } catch (_) {} });
 function urlB64ToU8(s) {
@@ -199,6 +200,7 @@ async function setupNotifications() {
   var supported = ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
   if (!supported) { cta.innerHTML = ''; return; }
   var installed = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  lbIsMobile = window.matchMedia('(pointer: coarse)').matches;
   var subscribed = false;
   try {
     var reg = await navigator.serviceWorker.register('/admin/sw.js', { scope: '/admin/' });
@@ -206,23 +208,27 @@ async function setupNotifications() {
     var sub = await reg.pushManager.getSubscription();
     subscribed = !!sub && Notification.permission === 'granted';
   } catch (e) {}
-  renderPushCta(cta, { subscribed: subscribed, installed: installed, canInstall: !!lbDeferredPrompt });
+  renderPushCta(cta, { subscribed: subscribed, installed: installed, canInstall: !!lbDeferredPrompt, mobile: lbIsMobile });
 }
 function renderPushCta(cta, st) {
   // Application installée ET notifications déjà activées → rien à afficher
   if (st.installed && st.subscribed) { cta.innerHTML = ''; return; }
 
+  var device = st.mobile ? 'téléphone' : 'ordinateur';
+  var tapWord = st.mobile ? 'Touchez' : 'Cliquez sur';
   var title, msg, btns = '';
   if (!st.installed) {
-    // Étape 1 : dans le navigateur — installer d'abord, activer ensuite (grisé)
+    // Étape 1 : installer d'abord, activer ensuite (grisé)
     title = 'Installez l\'application (étape 1)';
-    msg = 'Installez d\'abord l\'application. Les notifications s\'activeront ensuite, une fois l\'app ouverte depuis l\'écran d\'accueil.';
+    msg = st.mobile
+      ? 'Installez l\'application, puis ouvrez-la depuis son icône sur l\'écran d\'accueil : les notifications s\'activeront à l\'étape 2.'
+      : 'Installez l\'application : elle s\'ouvre dans sa propre fenêtre, où vous activerez les notifications à l\'étape 2.';
     btns += '<button class="push-btn" id="push-install">📲 Installer l\'application</button>';
     btns += '<button class="push-btn push-btn-2" id="push-enable" disabled title="Disponible une fois l\'application installée">🔔 Activer les notifications</button>';
   } else {
-    // Étape 2 : app installée, pas encore abonnée
+    // Étape 2 : app installée, pas encore abonnée — inclut l'étape « redémarrer l'app »
     title = 'Activez les notifications (étape 2)';
-    msg = 'Soyez prévenue sur ce téléphone à chaque nouvelle demande de rendez-vous.';
+    msg = tapWord + ' «&nbsp;Activer&nbsp;», autorisez, puis <b>fermez et rouvrez l\'application une fois</b> pour finaliser. Vous serez prévenue sur cet ' + device + ' à chaque nouvelle demande de rendez-vous.';
     btns += '<button class="push-btn" id="push-enable">🔔 Activer les notifications</button>';
   }
   cta.innerHTML = '<div class="push-banner"><div class="push-txt"><b>' + title + '</b><br><span>' + msg + '</span></div>'
@@ -232,11 +238,16 @@ function renderPushCta(cta, st) {
 }
 function showInstallHelp() {
   var cta = document.getElementById('push-cta'); if (!cta) return;
+  var head = lbIsMobile ? 'Ajoutez l\'application à l\'écran d\'accueil' : 'Installez l\'application';
+  var steps = lbIsMobile
+    ? '<ul class="push-help"><li><b>Android (Chrome) :</b> menu <b>⋮</b> en haut à droite → <b>Ajouter à l\'écran d\'accueil</b> → <b>Installer</b>.</li><li><b>iPhone (Safari) :</b> bouton <b>Partager</b> (carré + flèche) → <b>Sur l\'écran d\'accueil</b>.</li></ul>'
+    : '<ul class="push-help"><li>Cliquez sur l\'icône <b>Installer</b> (un écran avec une flèche, à droite de la barre d\'adresse).</li><li>Ou&nbsp;: menu <b>⋮</b> du navigateur → <b>Installer Laëti Admin…</b></li></ul>';
+  var ending = lbIsMobile
+    ? 'Ouvrez ensuite l\'application depuis son icône, puis activez les notifications.'
+    : 'L\'application s\'ouvre dans sa propre fenêtre&nbsp;: fermez-la et rouvrez-la une fois, puis activez les notifications.';
   cta.innerHTML = '<div class="push-banner" style="flex-direction:column;align-items:flex-start;text-align:left;">'
-    + '<div class="push-txt"><b>Ajoutez l\'application à l\'écran d\'accueil</b></div>'
-    + '<ul class="push-help"><li><b>Android (Chrome) :</b> menu <b>⋮</b> en haut à droite → <b>Ajouter à l\'écran d\'accueil</b> → <b>Installer</b>.</li>'
-    + '<li><b>iPhone (Safari) :</b> bouton <b>Partager</b> (carré + flèche) → <b>Sur l\'écran d\'accueil</b>.</li></ul>'
-    + '<div class="push-txt"><span>Ouvrez ensuite l\'application depuis son icône, puis activez les notifications.</span></div></div>';
+    + '<div class="push-txt"><b>' + head + '</b></div>' + steps
+    + '<div class="push-txt"><span>' + ending + '</span></div></div>';
 }
 async function doInstall() {
   if (!lbDeferredPrompt) { showInstallHelp(); return; }
@@ -268,8 +279,9 @@ function showPushHelp() {
   var cta = document.getElementById('push-cta'); if (!cta) return;
   cta.innerHTML = '<div class="push-banner" style="flex-direction:column;align-items:flex-start;text-align:left;">'
     + '<div class="push-txt"><b>Les notifications sont bloquées sur cet appareil</b><br><span>Pour les réautoriser :</span></div>'
-    + '<ul class="push-help"><li><b>Android :</b> appui long sur l\'icône « Laëti Admin » → <b>Infos sur l\'appli</b> → <b>Notifications</b> → activez.</li>'
-    + '<li><b>iPhone :</b> Réglages → descendez jusqu\'à <b>Laëti Admin</b> → <b>Notifications</b> → activez (iOS 16.4 minimum).</li></ul>'
+    + (lbIsMobile
+        ? '<ul class="push-help"><li><b>Android :</b> appui long sur l\'icône « Laëti Admin » → <b>Infos sur l\'appli</b> → <b>Notifications</b> → activez.</li><li><b>iPhone :</b> Réglages → descendez jusqu\'à <b>Laëti Admin</b> → <b>Notifications</b> → activez (iOS 16.4 minimum).</li></ul>'
+        : '<ul class="push-help"><li>Cliquez sur l\'icône <b>🔒 cadenas</b> à gauche de la barre d\'adresse → <b>Notifications</b> → <b>Autoriser</b>.</li></ul>')
     + '<div class="push-txt" style="margin-top:2px;"><span>Ensuite, <b>fermez complètement l\'application et rouvrez-la</b>, puis appuyez sur le bouton ci-dessous.</span></div>'
     + '<div class="push-actions"><button class="push-btn" id="push-enable">🔔 J\'ai activé, réessayer</button></div></div>';
   var be = document.getElementById('push-enable'); if (be) be.onclick = enablePush;
