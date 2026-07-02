@@ -448,7 +448,7 @@ function renderDispo(panel, av) {
   ['defaultDuration', 'slotInterval', 'minNoticeHours', 'horizonDays'].forEach((k) => { if (av[k] == null) av[k] = { defaultDuration: 60, slotInterval: 30, minNoticeHours: 24, horizonDays: 28 }[k]; });
   panel.innerHTML = '';
   const help = document.createElement('p'); help.className = 'sec-intro';
-  help.textContent = "Pour chaque jour, indiquez vos plages d'ouverture. Les créneaux proposés aux clients sont générés automatiquement à l'intérieur. Laissez un jour vide si vous ne travaillez pas ce jour-là.";
+  help.textContent = "Indiquez vos plages de travail pour chaque jour. Les créneaux proposés aux clients sont fixes (9h30, 11h, 14h, 15h30) et n'apparaissent que dans les plages que vous ouvrez : par exemple, une plage le matin affiche 9h30 et 11h, une plage l'après-midi affiche 14h et 15h30. Laissez un jour vide si vous ne travaillez pas ce jour-là. (Si vous acceptez un rendez-vous de 2h à 14h, le créneau de 15h30 passe automatiquement à 16h côté client.)";
   panel.appendChild(help);
 
   RDV_JOURS.forEach(([k, label]) => {
