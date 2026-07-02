@@ -537,44 +537,57 @@ function renderRdv(c) {
   loadDispo();
 }
 
+const DISPO_FIXED = ['09:30', '11:00', '14:00', '15:30'];
+function dispoMin(t) { const p = String(t).split(':'); return (+p[0]) * 60 + (+p[1]); }
 function renderDispo(panel, av) {
-  av.weekly = av.weekly || {}; av.blockedDates = av.blockedDates || [];
+  av.weekly = av.weekly || {};
   ['defaultDuration', 'slotInterval', 'minNoticeHours', 'horizonDays'].forEach((k) => { if (av[k] == null) av[k] = { defaultDuration: 60, slotInterval: 30, minNoticeHours: 24, horizonDays: 28 }[k]; });
+  // État coché par jour, en lisant le nouveau format (tableau d'heures) OU l'ancien (plages {start,end}).
+  function selectedFor(k) {
+    const raw = av.weekly[k]; const set = {};
+    if (Array.isArray(raw) && raw.length) {
+      if (typeof raw[0] === 'string') { raw.forEach((t) => { set[t] = 1; }); }
+      else { const wins = raw.map((w) => [dispoMin(w.start), dispoMin(w.end)]); DISPO_FIXED.forEach((t) => { const m = dispoMin(t); if (wins.some((w) => w[0] <= m && m < w[1])) set[t] = 1; }); }
+    }
+    return set;
+  }
+  const state = {}; RDV_JOURS.forEach(([k]) => { state[k] = selectedFor(k); });
+
   panel.innerHTML = '';
   const help = document.createElement('p'); help.className = 'sec-intro';
-  help.textContent = "Indiquez vos plages de travail pour chaque jour. Les créneaux proposés aux clients sont fixes (9h30, 11h, 14h, 15h30) et n'apparaissent que dans les plages que vous ouvrez : par exemple, une plage le matin affiche 9h30 et 11h, une plage l'après-midi affiche 14h et 15h30. Laissez un jour vide si vous ne travaillez pas ce jour-là. (Si vous acceptez un rendez-vous de 2h à 14h, le créneau de 15h30 passe automatiquement à 16h côté client.)";
+  help.textContent = "Touchez les heures auxquelles vous acceptez des rendez-vous, jour par jour. C'est exactement ce que verront vos clients. Un jour sans aucune heure = fermé.";
   panel.appendChild(help);
 
+  const grid = document.createElement('div'); grid.className = 'dispo-grid';
   RDV_JOURS.forEach(([k, label]) => {
-    if (!Array.isArray(av.weekly[k])) av.weekly[k] = [];
-    const row = document.createElement('div'); row.className = 'jour';
-    const h = document.createElement('div'); h.className = 'jour-h'; h.textContent = label;
-    const wins = document.createElement('div'); wins.className = 'wins';
-    function drawWins() {
-      wins.innerHTML = '';
-      av.weekly[k].forEach((w, i) => {
-        const wd = document.createElement('div'); wd.className = 'win';
-        const s = document.createElement('input'); s.type = 'time'; s.value = w.start || '09:00'; s.onchange = () => { w.start = s.value; };
-        const sep = document.createElement('span'); sep.className = 'win-sep'; sep.textContent = '→';
-        const e = document.createElement('input'); e.type = 'time'; e.value = w.end || '12:00'; e.onchange = () => { w.end = e.value; };
-        const rm = document.createElement('button'); rm.className = 'win-rm'; rm.textContent = '✕'; rm.title = 'Retirer cette plage'; rm.onclick = () => { av.weekly[k].splice(i, 1); drawWins(); };
-        wd.append(s, sep, e, rm); wins.appendChild(wd);
-      });
-      const add = document.createElement('button'); add.className = 'win-add'; add.textContent = '＋ ajouter une plage';
-      add.onclick = () => { av.weekly[k].push({ start: '09:00', end: '12:00' }); drawWins(); };
-      wins.appendChild(add);
+    const day = document.createElement('div'); day.className = 'dispo-day';
+    const lab = document.createElement('div'); lab.className = 'dispo-lab';
+    function refreshLab() {
+      const none = !Object.keys(state[k]).length;
+      day.classList.toggle('closed', none);
+      lab.innerHTML = '<span class="dispo-name">' + label + '</span>' + (none ? '<span class="dispo-closed">fermé</span>' : '');
     }
-    drawWins();
-    row.append(h, wins); panel.appendChild(row);
+    const pills = document.createElement('div'); pills.className = 'dispo-pills';
+    DISPO_FIXED.forEach((t, i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'slot-pill' + (i === 2 ? ' pill-gap' : '');
+      b.textContent = t.replace(':', 'h');
+      function refresh() { const on = !!state[k][t]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+      b.onclick = () => { if (state[k][t]) delete state[k][t]; else state[k][t] = 1; refresh(); refreshLab(); };
+      refresh(); pills.appendChild(b);
+    });
+    refreshLab();
+    day.append(lab, pills); grid.appendChild(day);
   });
+  panel.appendChild(grid);
 
   const note = document.createElement('div'); note.className = 'rdv-note';
-  note.innerHTML = '<strong>Congés, absence, ou rendez-vous personnel&nbsp;?</strong><br>Ajoutez simplement l\'événement dans votre <strong>agenda Google</strong> (même une journée entière «&nbsp;Congés&nbsp;»). Les créneaux concernés se libèrent automatiquement — rien à indiquer ici.';
+  note.innerHTML = '<strong>Congés, absence, ou rendez-vous personnel&nbsp;?</strong><br>Ajoutez l\'événement dans votre <strong>agenda Google</strong> (même une journée entière). Les créneaux concernés se libèrent tout seuls — rien à faire ici.<br><span style="color:#6f7c69">Astuce&nbsp;: si vous acceptez un rendez-vous de 2&nbsp;h à 14&nbsp;h, le 15&nbsp;h30 devient 16&nbsp;h automatiquement.</span>';
   panel.appendChild(note);
 
-  const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '22px'; save.textContent = '💾 Enregistrer mes disponibilités';
+  const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '18px'; save.textContent = '💾 Enregistrer mes disponibilités';
   save.onclick = async () => {
     save.disabled = true; save.textContent = '⏳ Enregistrement…';
+    RDV_JOURS.forEach(([k]) => { av.weekly[k] = DISPO_FIXED.filter((t) => state[k][t]); }); // écrit le nouveau format
     try {
       const r = await api('/api/availability', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(av) });
       if (!r.ok) throw new Error();

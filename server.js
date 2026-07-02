@@ -223,20 +223,27 @@ app.get('/api/slots', async (req, res) => {
   while (cur <= toDate && guard < 400) {
     const ds = cur; cur = nextDate(cur); guard++;
     if ((av.blockedDates || []).indexOf(ds) >= 0 || gBlocked.indexOf(ds) >= 0) continue;
-    const windows = (av.weekly && av.weekly[String(dowOf(ds))]) || [];
-    if (!windows.length) continue;
-    const wins = windows.map((w) => ({ s: hm(w.start), e: hm(w.end) }));
-    const inWin = (t) => wins.some((w) => w.s <= t && t < w.e);
+    const raw = (av.weekly && av.weekly[String(dowOf(ds))]) || [];
+    if (!raw.length) continue;
+    // Heures cochées ce jour-là. Nouveau format : ["09:30","11:00"]. Ancien format : [{start,end}] -> heures fixes comprises dans une plage.
+    let selMin;
+    if (typeof raw[0] === 'string') {
+      selMin = raw.map(hm).filter((m) => FIXED.indexOf(m) >= 0);
+    } else {
+      const wins = raw.map((w) => ({ s: hm(w.start), e: hm(w.end) }));
+      selMin = FIXED.filter((t) => wins.some((w) => w.s <= t && t < w.e));
+    }
+    if (!selMin.length) continue;
     const bkDay = taken.filter((b) => b.date === ds).map((b) => ({ s: hm(b.time), e: hm(b.time) + (b.durationMin || dur) }));
-    // Le 2e créneau d'une demi-journée se décale si le RDV du 1er déborde (ex. 14h en 120 min -> 15h30 devient 16h).
-    let cands = FIXED.slice();
+    let cands = FIXED.filter((t) => selMin.indexOf(t) >= 0);
+    // Le 2e créneau d'une demi-journée se décale si le RDV du 1er déborde (ex. 14h en 120 min -> 15h30 devient 16h) — uniquement si ce 2e créneau est proposé.
     PAIRS.forEach((p) => {
+      if (selMin.indexOf(p[1]) < 0) return;
       const bk = bkDay.find((b) => b.s === p[0]);
       if (bk && bk.e > p[1]) { cands = cands.filter((x) => x !== p[1]); cands.push(bk.e); }
     });
     const slots = [];
     cands.sort((a, b) => a - b).forEach((t) => {
-      if (!inWin(t)) return;
       if (ds === now.date && t < now.minutes + (av.minNoticeHours || 0) * 60) return;
       if (bkDay.some((b) => overlap(b.s, b.e, t, t + dur))) return;
       if (busyClash(ds, t, dur)) return;
