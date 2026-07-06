@@ -194,6 +194,8 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 .dem-ok:hover{background:#4e6a4b;}
 .dem-no{background:#fff;color:#b0392b;border:1px solid #e8b4ad;border-radius:10px;padding:11px 18px;font-weight:700;font-family:inherit;font-size:14.5px;cursor:pointer;}
 .dem-no:hover{background:#fdecea;}
+.dem-edit{background:#fff;color:var(--terra-dk);border:1px solid var(--terra);border-radius:10px;padding:11px 18px;font-weight:700;font-family:inherit;font-size:14.5px;cursor:pointer;}
+.dem-edit:hover{background:#fbeee8;}
 @media(max-width:560px){.rdv-set{grid-template-columns:1fr}
 .dispo-day{flex-direction:column;align-items:stretch;gap:9px;padding:13px 2px;}
 .dispo-lab{flex:none;}

@@ -298,6 +298,22 @@ app.post('/api/bookings/:id', requireAuth, (req, res) => {
   const i = books.findIndex((x) => x.id === req.params.id);
   if (i < 0) return res.status(404).json({ error: 'Demande introuvable.' });
   const u = req.body || {};
+  // --- Déplacement d'un RDV (nouvelle date / heure / durée) depuis l'application ---
+  if (u.reschedule) {
+    const nd = String(u.date || books[i].date), nt = String(u.time || books[i].time);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nd) || !/^\d{2}:\d{2}$/.test(nt)) return res.status(400).json({ error: 'Date ou heure invalide.' });
+    const ndur = u.durationMin ? Math.max(15, parseInt(u.durationMin, 10)) : (books[i].durationMin || 60);
+    const clash = books.some((x, j) => j !== i && (x.status === 'pending' || x.status === 'confirmed') && x.date === nd && overlap(hm(x.time), hm(x.time) + (x.durationMin || ndur), hm(nt), hm(nt) + ndur));
+    if (clash) return res.status(409).json({ error: "Ce créneau est déjà occupé, choisissez-en un autre." });
+    books[i].date = nd; books[i].time = nt; books[i].durationMin = ndur;
+    return writeJson(BOOK_FILE, books, (e) => {
+      if (e) return res.status(500).json({ error: 'Échec.' });
+      const b = books[i];
+      if (u.sendReschedule && u.customSms) sendSms(b.phone, u.customSms); // prévenir le patient (optionnel)
+      if (google.enabled()) google.moveEvent(b); // déplace l'événement dans l'agenda -> ancien créneau libéré, nouveau bloqué
+      res.json({ ok: true, booking: b });
+    });
+  }
   if (u.status && ['pending', 'confirmed', 'refused', 'cancelled'].indexOf(u.status) >= 0) books[i].status = u.status;
   if (u.durationMin) books[i].durationMin = Math.max(15, parseInt(u.durationMin, 10));
   if (typeof u.sendReminder === 'boolean') books[i].sendReminder = u.sendReminder;

@@ -530,6 +530,8 @@ function toast(msg, isErr) {
 /* ---------- démarrage ---------------------------------------------------- */
 /* ---------- onglet « Rendez-vous » (custom) ----------------------------- */
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+// Tri alphabétique des patients sur le nom affiché (prénom + nom), insensible aux accents/majuscules.
+function patSort(a, b) { return (((a.firstname || '') + ' ' + (a.lastname || '')).trim()).localeCompare(((b.firstname || '') + ' ' + (b.lastname || '')).trim(), 'fr', { sensitivity: 'base' }); }
 const RDV_JOURS = [['1', 'Lundi'], ['2', 'Mardi'], ['3', 'Mercredi'], ['4', 'Jeudi'], ['5', 'Vendredi'], ['6', 'Samedi'], ['0', 'Dimanche']];
 
 function renderRdv(c) {
@@ -627,6 +629,15 @@ function renderDem(panel, list) {
       smsConfirmModal('Annuler le rendez-vous', [{ key: 'cancel', label: 'Prévenir le patient par SMS de l\'annulation', checked: false }], fillSmsPreview(tpl.cancel || '', b), isMob, (s) => applyDecision(b, 'cancelled', null, { sendCancel: !!s.cancel, customSms: s.custom ? s.text : undefined }, card));
     }).catch(() => applyDecision(b, 'cancelled', null, {}, card));
   }
+  function rescheduleRdv(b, card) {
+    const isMob = isMobilePhone(b.phone);
+    rescheduleModal(b, isMob, (s) => {
+      card.style.opacity = '.5';
+      api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reschedule: true, date: s.date, time: s.time, durationMin: s.durationMin, sendReschedule: !!s.sms, customSms: (s.sms ? s.text : undefined) }) })
+        .then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then((res) => { if (!res.ok) throw new Error((res.j && res.j.error) || 'Erreur'); toast('✓ Rendez-vous déplacé.'); b.date = s.date; b.time = s.time; b.durationMin = s.durationMin; renderDem(panel, list); })
+        .catch((e) => { toast('⚠ ' + e.message, true); card.style.opacity = '1'; });
+    });
+  }
   function decide(b, status, durationMin, card) {
     const isMob = isMobilePhone(b.phone);
     api('/api/sms-templates').then((r) => r.json()).then((tpl) => {
@@ -656,9 +667,11 @@ function renderDem(panel, list) {
       act.append(lbl, dur, ok, no); card.appendChild(act);
     } else if (b.status === 'confirmed') {
       const act = document.createElement('div'); act.className = 'dem-act';
+      const mo = document.createElement('button'); mo.className = 'dem-edit'; mo.textContent = '✏️ Modifier';
+      mo.onclick = () => rescheduleRdv(b, card);
       const cx = document.createElement('button'); cx.className = 'dem-no'; cx.textContent = '🗑 Annuler le RDV';
       cx.onclick = () => cancelRdv(b, card);
-      act.append(cx); card.appendChild(act);
+      act.append(mo, cx); card.appendChild(act);
     }
     panel.appendChild(card);
   });
@@ -692,6 +705,39 @@ function smsConfirmModal(title, checks, defaultText, isMobile, onValidate) {
   function close() { ov.remove(); }
   box.querySelector('.cm-cancel').onclick = close; ov.onclick = (e) => { if (e.target === ov) close(); };
   box.querySelector('.cm-ok').onclick = () => { const state = { custom: customOn, text: ta.value }; box.querySelectorAll('input[data-k]').forEach((i) => { state[i.getAttribute('data-k')] = i.checked; }); close(); onValidate(state); };
+}
+
+/* ---------- modale « Déplacer le rendez-vous » -------------------------- */
+function rescheduleModal(b, isMobile, onValidate) {
+  const RESCHED_TPL = "Bonjour {prenom}, votre rendez-vous avec Laeti'Bienfaits est deplace au {date} a {heure}. A bientot !";
+  const ov = document.createElement('div'); ov.className = 'cm-ov';
+  const box = document.createElement('div'); box.className = 'cm-box';
+  let html = '<h3 class="cm-title">Déplacer le rendez-vous</h3>';
+  html += '<div class="cm-warn" style="background:#eef4ea;color:#3f5636;border-color:#cfe0c8">Actuellement : ' + esc(b.date.split('-').reverse().join('/')) + ' à ' + esc(b.time) + ' · ' + (b.durationMin || 60) + ' min</div>';
+  html += '<div class="cr-2"><div><label class="cm-lbl">Nouveau jour</label><input class="cm-in" type="date" data-k="date" value="' + esc(b.date) + '"></div><div><label class="cm-lbl">Nouvelle heure</label><input class="cm-in" type="time" step="900" data-k="time" value="' + esc(b.time) + '"></div></div>';
+  html += '<label class="cm-lbl">Durée (min)</label><input class="cm-in" type="number" min="15" step="15" data-k="dur" value="' + (b.durationMin || 60) + '">';
+  html += '<label class="cm-check"><input type="checkbox" data-k="sms"' + (isMobile ? '' : ' disabled') + '> Prévenir le patient par SMS du changement</label>';
+  if (!isMobile) html += '<div class="cm-warn">⚠ Le numéro n\'est pas un mobile : aucun SMS ne pourra être envoyé.</div>';
+  html += '<button type="button" class="cm-custom-toggle">✏️ Personnaliser le SMS</button>';
+  html += '<textarea class="cm-text" rows="3" style="display:none"></textarea>';
+  html += '<div class="cm-act"><button type="button" class="cm-cancel">Annuler</button><button type="button" class="cm-ok">Déplacer</button></div>';
+  box.innerHTML = html; ov.appendChild(box); document.body.appendChild(ov);
+  const dEl = box.querySelector('[data-k="date"]'), tEl = box.querySelector('[data-k="time"]'), ta = box.querySelector('.cm-text');
+  let customOn = false;
+  function preview() { if (!customOn) ta.value = fillSmsPreview(RESCHED_TPL, Object.assign({}, b, { date: dEl.value, time: tEl.value })); }
+  preview(); dEl.onchange = preview; tEl.onchange = preview;
+  box.querySelector('.cm-custom-toggle').onclick = () => { customOn = !customOn; ta.style.display = customOn ? 'block' : 'none'; box.querySelector('.cm-custom-toggle').classList.toggle('on', customOn); };
+  function close() { ov.remove(); }
+  box.querySelector('.cm-cancel').onclick = close; ov.onclick = (e) => { if (e.target === ov) close(); };
+  box.querySelector('.cm-ok').onclick = () => {
+    const date = dEl.value, time = tEl.value;
+    if (!date || !time) { toast('Choisissez une date et une heure.', true); return; }
+    preview();
+    const dur = parseInt(box.querySelector('[data-k="dur"]').value, 10) || (b.durationMin || 60);
+    const sms = !!box.querySelector('[data-k="sms"]').checked;
+    const text = ta.value; close();
+    onValidate({ date: date, time: time, durationMin: dur, sms: sms, text: text });
+  };
 }
 
 /* ---------- onglet « Messages SMS » ------------------------------------- */
@@ -735,7 +781,7 @@ function renderPatients(c) {
     exp.onclick = () => api('/api/patients/export').then((r) => r.text()).then((csv) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'patients.csv'; a.click(); URL.revokeObjectURL(a.href); });
     impf.onchange = () => { const f = impf.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => api('/api/patients/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv: rd.result }) }).then((r) => r.json()).then((d) => { toast('✓ ' + (d.added || 0) + ' ajouté(s), ' + (d.updated || 0) + ' mis à jour.'); load(); }).catch(() => toast('⚠ Échec import.', true)); rd.readAsText(f); };
     if (!list.length) { const e = document.createElement('p'); e.className = 'sec-intro'; e.textContent = 'Aucun patient pour le moment.'; wrap.appendChild(e); }
-    list.slice().sort((a, b) => (a.lastname || '').localeCompare(b.lastname || '')).forEach((p) => {
+    list.slice().sort(patSort).forEach((p) => {
       const card = document.createElement('div'); card.className = 'list-item acc';
       const head = document.createElement('div'); head.className = 'list-head';
       const chev = document.createElement('span'); chev.className = 'acc-chev';
@@ -788,7 +834,7 @@ function renderCreate(panel) {
     panel.appendChild(intro);
     const form = document.createElement('div'); form.className = 'cr-form';
     let opts = '<option value="">— Nouveau patient —</option>';
-    patients.slice().sort((a, b) => (a.lastname || '').localeCompare(b.lastname || '')).forEach((p) => { opts += '<option value="' + p.id + '">' + esc(((p.firstname || '') + ' ' + (p.lastname || '')).trim() + (p.phone ? ' · ' + p.phone : '')) + '</option>'; });
+    patients.slice().sort(patSort).forEach((p) => { opts += '<option value="' + p.id + '">' + esc(((p.firstname || '') + ' ' + (p.lastname || '')).trim() + (p.phone ? ' · ' + p.phone : '')) + '</option>'; });
     let mopts = '<option value="">— Choisir —</option>';
     prestas.forEach((p) => { mopts += '<option value="' + esc(p.name) + '" data-dur="' + (p.duration || 0) + '">' + esc(p.name) + (p.duration ? ' (' + p.duration + ' min)' : '') + '</option>'; });
     mopts += '<option value="__autre__">Autre…</option>';

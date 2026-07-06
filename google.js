@@ -71,6 +71,17 @@ async function deleteEvent(b) {
   try { await fetch(calUrl('/' + b.gcalId), { method: 'DELETE', headers: { Authorization: 'Bearer ' + t } }); }
   catch (e) { console.warn('[google] deleteEvent err : ' + e.message); }
 }
+// Déplacer un RDV existant (nouvelle date/heure/durée) dans l'agenda.
+async function moveEvent(b) {
+  const t = await getToken(); if (!t || !b.gcalId) return;
+  try {
+    await fetch(calUrl('/' + b.gcalId), { method: 'PATCH', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        start: { dateTime: b.date + 'T' + b.time + ':00', timeZone: TZ },
+        end: { dateTime: b.date + 'T' + endTime(b.time, b.durationMin) + ':00', timeZone: TZ },
+      }) });
+  } catch (e) { console.warn('[google] moveEvent err : ' + e.message); }
+}
 
 // Plages occupées (freeBusy) — cache 60 s pour ne pas marteler l'API
 let bcache = { key: '', at: 0, val: [] };
@@ -117,4 +128,4 @@ async function blockedDays(fromISO, toISO) {
   } catch (e) { console.warn('[google] blockedDays err : ' + e.message); return []; }
 }
 
-module.exports = { enabled, createEvent, confirmEvent, deleteEvent, busyRanges, blockedDays };
+module.exports = { enabled, createEvent, confirmEvent, deleteEvent, moveEvent, busyRanges, blockedDays };
