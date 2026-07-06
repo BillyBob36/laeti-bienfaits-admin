@@ -71,16 +71,20 @@ async function deleteEvent(b) {
   try { await fetch(calUrl('/' + b.gcalId), { method: 'DELETE', headers: { Authorization: 'Bearer ' + t } }); }
   catch (e) { console.warn('[google] deleteEvent err : ' + e.message); }
 }
-// Déplacer un RDV existant (nouvelle date/heure/durée) dans l'agenda.
-async function moveEvent(b) {
+// Mettre à jour un RDV existant (date/heure/durée + nom/prestation/motif) dans l'agenda.
+async function updateEvent(b) {
   const t = await getToken(); if (!t || !b.gcalId) return;
   try {
     await fetch(calUrl('/' + b.gcalId), { method: 'PATCH', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        summary: '✅ RDV — ' + b.name,
+        description: 'Rendez-vous confirmé (modifié par Laëtitia).\nClient : ' + b.name + '\nTéléphone : ' + (b.phone || '—')
+          + '\nPrestation : ' + (b.prestation || '—')
+          + (b.motif && b.motif !== b.prestation ? '\nInfos complémentaires : ' + b.motif : ''),
         start: { dateTime: b.date + 'T' + b.time + ':00', timeZone: TZ },
         end: { dateTime: b.date + 'T' + endTime(b.time, b.durationMin) + ':00', timeZone: TZ },
       }) });
-  } catch (e) { console.warn('[google] moveEvent err : ' + e.message); }
+  } catch (e) { console.warn('[google] updateEvent err : ' + e.message); }
 }
 
 // Plages occupées (freeBusy) — cache 60 s pour ne pas marteler l'API
@@ -128,4 +132,4 @@ async function blockedDays(fromISO, toISO) {
   } catch (e) { console.warn('[google] blockedDays err : ' + e.message); return []; }
 }
 
-module.exports = { enabled, createEvent, confirmEvent, deleteEvent, moveEvent, busyRanges, blockedDays };
+module.exports = { enabled, createEvent, confirmEvent, deleteEvent, updateEvent, busyRanges, blockedDays };

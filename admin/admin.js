@@ -629,12 +629,13 @@ function renderDem(panel, list) {
       smsConfirmModal('Annuler le rendez-vous', [{ key: 'cancel', label: 'Prévenir le patient par SMS de l\'annulation', checked: false }], fillSmsPreview(tpl.cancel || '', b), isMob, (s) => applyDecision(b, 'cancelled', null, { sendCancel: !!s.cancel, customSms: s.custom ? s.text : undefined }, card));
     }).catch(() => applyDecision(b, 'cancelled', null, {}, card));
   }
-  function rescheduleRdv(b, card) {
+  function editBookingRdv(b, card) {
     const isMob = isMobilePhone(b.phone);
-    rescheduleModal(b, isMob, (s) => {
+    editBookingModal(b, isMob, (s) => {
       card.style.opacity = '.5';
-      api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reschedule: true, date: s.date, time: s.time, durationMin: s.durationMin, sendReschedule: !!s.sms, customSms: (s.sms ? s.text : undefined) }) })
-        .then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then((res) => { if (!res.ok) throw new Error((res.j && res.j.error) || 'Erreur'); toast('✓ Rendez-vous déplacé.'); b.date = s.date; b.time = s.time; b.durationMin = s.durationMin; renderDem(panel, list); })
+      const payload = Object.assign({ reschedule: true }, s.fields, { sendReschedule: !!s.sms, customSms: (s.sms ? s.text : undefined) });
+      api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        .then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then((res) => { if (!res.ok) throw new Error((res.j && res.j.error) || 'Erreur'); toast('✓ Rendez-vous modifié.'); Object.assign(b, s.fields); b.name = ((s.fields.firstname || '') + ' ' + (s.fields.lastname || '')).trim(); renderDem(panel, list); })
         .catch((e) => { toast('⚠ ' + e.message, true); card.style.opacity = '1'; });
     });
   }
@@ -668,7 +669,7 @@ function renderDem(panel, list) {
     } else if (b.status === 'confirmed') {
       const act = document.createElement('div'); act.className = 'dem-act';
       const mo = document.createElement('button'); mo.className = 'dem-edit'; mo.textContent = '✏️ Modifier';
-      mo.onclick = () => rescheduleRdv(b, card);
+      mo.onclick = () => editBookingRdv(b, card);
       const cx = document.createElement('button'); cx.className = 'dem-no'; cx.textContent = '🗑 Annuler le RDV';
       cx.onclick = () => cancelRdv(b, card);
       act.append(mo, cx); card.appendChild(act);
@@ -707,36 +708,52 @@ function smsConfirmModal(title, checks, defaultText, isMobile, onValidate) {
   box.querySelector('.cm-ok').onclick = () => { const state = { custom: customOn, text: ta.value }; box.querySelectorAll('input[data-k]').forEach((i) => { state[i.getAttribute('data-k')] = i.checked; }); close(); onValidate(state); };
 }
 
-/* ---------- modale « Déplacer le rendez-vous » -------------------------- */
-function rescheduleModal(b, isMobile, onValidate) {
-  const RESCHED_TPL = "Bonjour {prenom}, votre rendez-vous avec Laeti'Bienfaits est deplace au {date} a {heure}. Ne pas repondre a ce SMS.";
+/* ---------- modale « Modifier le rendez-vous » (mêmes champs que la création) --- */
+function editBookingModal(b, isMobile, onValidate) {
+  const RESCHED_TPL = "Bonjour {prenom}, votre rendez-vous avec Laeti'Bienfaits est déplacé au {date} à {heure}. Ne pas répondre à ce SMS.";
+  const prestas = prestationsList();
+  let mopts = '<option value="">— Choisir —</option>';
+  prestas.forEach((p) => { mopts += '<option value="' + esc(p.name) + '" data-dur="' + (p.duration || 0) + '">' + esc(p.name) + (p.duration ? ' (' + p.duration + ' min)' : '') + '</option>'; });
+  mopts += '<option value="__autre__">Autre…</option>';
   const ov = document.createElement('div'); ov.className = 'cm-ov';
   const box = document.createElement('div'); box.className = 'cm-box';
-  let html = '<h3 class="cm-title">Déplacer le rendez-vous</h3>';
-  html += '<div class="cm-warn" style="background:#eef4ea;color:#3f5636;border-color:#cfe0c8">Actuellement : ' + esc(b.date.split('-').reverse().join('/')) + ' à ' + esc(b.time) + ' · ' + (b.durationMin || 60) + ' min</div>';
-  html += '<div class="cr-2"><div><label class="cm-lbl">Nouveau jour</label><input class="cm-in" type="date" data-k="date" value="' + esc(b.date) + '"></div><div><label class="cm-lbl">Nouvelle heure</label><input class="cm-in" type="time" step="900" data-k="time" value="' + esc(b.time) + '"></div></div>';
+  let html = '<h3 class="cm-title">Modifier le rendez-vous</h3>';
+  html += '<div class="cr-2"><div><label class="cm-lbl">Prénom *</label><input class="cm-in" data-k="first" value="' + esc(b.firstname || '') + '"></div><div><label class="cm-lbl">Nom *</label><input class="cm-in" data-k="last" value="' + esc(b.lastname || '') + '"></div></div>';
+  html += '<label class="cm-lbl">Téléphone</label><input class="cm-in" data-k="phone" inputmode="tel" value="' + esc(b.phone || '') + '">';
+  html += '<label class="cm-lbl">Email</label><input class="cm-in" data-k="email" inputmode="email" value="' + esc(b.email || '') + '">';
+  html += '<label class="cm-lbl">Motif / prestation *</label><select class="cm-in" data-k="motifsel">' + mopts + '</select>';
+  html += '<input class="cm-in" data-k="motifother" placeholder="Précisez le motif" style="display:none;margin-top:6px">';
+  html += '<label class="cm-lbl">Informations complémentaires</label><textarea class="cm-in" data-k="info" rows="3">' + esc((b.motif && b.motif !== b.prestation) ? b.motif : '') + '</textarea>';
+  html += '<div class="cr-2"><div><label class="cm-lbl">Jour *</label><input class="cm-in" type="date" data-k="date" value="' + esc(b.date || '') + '"></div><div><label class="cm-lbl">Heure *</label><input class="cm-in" type="time" step="900" data-k="time" value="' + esc(b.time || '') + '"></div></div>';
   html += '<label class="cm-lbl">Durée (min)</label><input class="cm-in" type="number" min="15" step="15" data-k="dur" value="' + (b.durationMin || 60) + '">';
   html += '<label class="cm-check"><input type="checkbox" data-k="sms"' + (isMobile ? '' : ' disabled') + '> Prévenir le patient par SMS du changement</label>';
   if (!isMobile) html += '<div class="cm-warn">⚠ Le numéro n\'est pas un mobile : aucun SMS ne pourra être envoyé.</div>';
   html += '<button type="button" class="cm-custom-toggle">✏️ Personnaliser le SMS</button>';
   html += '<textarea class="cm-text" rows="3" style="display:none"></textarea>';
-  html += '<div class="cm-act"><button type="button" class="cm-cancel">Annuler</button><button type="button" class="cm-ok">Déplacer</button></div>';
+  html += '<div class="cm-act"><button type="button" class="cm-cancel">Annuler</button><button type="button" class="cm-ok">Enregistrer</button></div>';
   box.innerHTML = html; ov.appendChild(box); document.body.appendChild(ov);
-  const dEl = box.querySelector('[data-k="date"]'), tEl = box.querySelector('[data-k="time"]'), ta = box.querySelector('.cm-text');
+  const q = (k) => box.querySelector('[data-k="' + k + '"]');
+  const mSel = q('motifsel'), mOther = q('motifother'), dEl = q('date'), tEl = q('time'), ta = box.querySelector('.cm-text');
+  (function setMotif(motif) { if (!motif) return; const match = prestas.find((p) => p.name === motif); if (match) { mSel.value = motif; } else { mSel.value = '__autre__'; mOther.style.display = 'block'; mOther.value = motif; } })(b.prestation || '');
+  mSel.onchange = () => { if (mSel.value === '__autre__') { mOther.style.display = 'block'; mOther.focus(); } else { mOther.style.display = 'none'; const o = mSel.options[mSel.selectedIndex]; const d = o && parseInt(o.getAttribute('data-dur'), 10); if (d) q('dur').value = d; } };
   let customOn = false;
-  function preview() { if (!customOn) ta.value = fillSmsPreview(RESCHED_TPL, Object.assign({}, b, { date: dEl.value, time: tEl.value })); }
+  function preview() { if (!customOn) ta.value = fillSmsPreview(RESCHED_TPL, Object.assign({}, b, { firstname: q('first').value, date: dEl.value, time: tEl.value })); }
   preview(); dEl.onchange = preview; tEl.onchange = preview;
   box.querySelector('.cm-custom-toggle').onclick = () => { customOn = !customOn; ta.style.display = customOn ? 'block' : 'none'; box.querySelector('.cm-custom-toggle').classList.toggle('on', customOn); };
   function close() { ov.remove(); }
   box.querySelector('.cm-cancel').onclick = close; ov.onclick = (e) => { if (e.target === ov) close(); };
   box.querySelector('.cm-ok').onclick = () => {
+    const first = q('first').value.trim(), last = q('last').value.trim();
+    const isAutre = mSel.value === '__autre__';
+    const prestation = isAutre ? mOther.value.trim() : mSel.value;
     const date = dEl.value, time = tEl.value;
+    if (!first || !last) { toast('Prénom et nom obligatoires.', true); return; }
+    if (!prestation) { toast('Motif / prestation obligatoire.', true); return; }
     if (!date || !time) { toast('Choisissez une date et une heure.', true); return; }
     preview();
-    const dur = parseInt(box.querySelector('[data-k="dur"]').value, 10) || (b.durationMin || 60);
-    const sms = !!box.querySelector('[data-k="sms"]').checked;
-    const text = ta.value; close();
-    onValidate({ date: date, time: time, durationMin: dur, sms: sms, text: text });
+    const fields = { firstname: first, lastname: last, phone: q('phone').value.trim(), email: q('email').value.trim(), prestation: prestation, motif: q('info').value.trim(), date: date, time: time, durationMin: parseInt(q('dur').value, 10) || (b.durationMin || 60) };
+    const sms = !!q('sms').checked, text = ta.value; close();
+    onValidate({ fields: fields, sms: sms, text: text });
   };
 }
 

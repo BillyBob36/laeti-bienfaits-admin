@@ -298,19 +298,28 @@ app.post('/api/bookings/:id', requireAuth, (req, res) => {
   const i = books.findIndex((x) => x.id === req.params.id);
   if (i < 0) return res.status(404).json({ error: 'Demande introuvable.' });
   const u = req.body || {};
-  // --- Déplacement d'un RDV (nouvelle date / heure / durée) depuis l'application ---
+  // --- Modification complète d'un RDV existant (horaires + coordonnées + motif) depuis l'application ---
   if (u.reschedule) {
-    const nd = String(u.date || books[i].date), nt = String(u.time || books[i].time);
+    const b0 = books[i];
+    const nd = String(u.date || b0.date), nt = String(u.time || b0.time);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nd) || !/^\d{2}:\d{2}$/.test(nt)) return res.status(400).json({ error: 'Date ou heure invalide.' });
-    const ndur = u.durationMin ? Math.max(15, parseInt(u.durationMin, 10)) : (books[i].durationMin || 60);
+    const ndur = u.durationMin ? Math.max(15, parseInt(u.durationMin, 10)) : (b0.durationMin || 60);
     const clash = books.some((x, j) => j !== i && (x.status === 'pending' || x.status === 'confirmed') && x.date === nd && overlap(hm(x.time), hm(x.time) + (x.durationMin || ndur), hm(nt), hm(nt) + ndur));
     if (clash) return res.status(409).json({ error: "Ce créneau est déjà occupé, choisissez-en un autre." });
-    books[i].date = nd; books[i].time = nt; books[i].durationMin = ndur;
+    if (typeof u.firstname === 'string') b0.firstname = u.firstname.trim().slice(0, 60);
+    if (typeof u.lastname === 'string') b0.lastname = u.lastname.trim().slice(0, 60);
+    if (b0.firstname || b0.lastname) b0.name = ((b0.firstname || '') + ' ' + (b0.lastname || '')).trim();
+    if (typeof u.phone === 'string') b0.phone = u.phone.trim().slice(0, 20);
+    if (typeof u.email === 'string') b0.email = u.email.trim().slice(0, 120);
+    if (typeof u.prestation === 'string') b0.prestation = u.prestation.slice(0, 120);
+    if (typeof u.motif === 'string') b0.motif = u.motif.slice(0, 500);
+    b0.date = nd; b0.time = nt; b0.durationMin = ndur;
     return writeJson(BOOK_FILE, books, (e) => {
       if (e) return res.status(500).json({ error: 'Échec.' });
       const b = books[i];
+      upsertPatient(b); // garde l'annuaire à jour (coordonnées, motif habituel)
       if (u.sendReschedule && u.customSms) sendSms(b.phone, u.customSms); // prévenir le patient (optionnel)
-      if (google.enabled()) google.moveEvent(b); // déplace l'événement dans l'agenda -> ancien créneau libéré, nouveau bloqué
+      if (google.enabled()) google.updateEvent(b); // met à jour l'événement -> ancien créneau libéré, nouveau bloqué
       res.json({ ok: true, booking: b });
     });
   }
@@ -350,10 +359,10 @@ function frWhen(b) { const p = b.date.split('-'); return p[2] + '/' + p[1] + '/'
 // --- Modèles de SMS (éditables par Laetitia depuis la console) ---
 const TPL_FILE = path.join(DATA_DIR, 'sms_templates.json');
 const DEFAULT_TPL = {
-  confirm: "Bonjour {prenom}, votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits est CONFIRME. A bientot ! Ne pas repondre a ce SMS.",
-  reminder: "Rappel : votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits, c'est dans 2 jours. A bientot ! Ne pas repondre a ce SMS.",
-  refuse: "Bonjour {prenom}, votre demande de RDV du {date} a {heure} n'a pu etre retenue. Appelez le 06 73 96 21 83 pour un autre creneau. Ne pas repondre a ce SMS.",
-  cancel: "Bonjour {prenom}, votre RDV du {date} a {heure} avec Laeti'Bienfaits est ANNULE. Pour reprendre RDV appelez le 06 73 96 21 83. Ne pas repondre a ce SMS.",
+  confirm: "Bonjour {prenom}, votre rendez-vous du {date} à {heure} avec Laeti'Bienfaits est CONFIRMÉ, à très vite ! Ne pas répondre à ce SMS.",
+  reminder: "Rappel : votre rendez-vous du {date} à {heure} avec Laeti'Bienfaits, c'est dans 2 jours, à très vite ! Ne pas répondre à ce SMS.",
+  refuse: "Bonjour {prenom}, votre demande de RDV du {date} à {heure} n'a pas été retenue. Appelez le 06 73 96 21 83 pour un autre créneau. Ne pas répondre à ce SMS.",
+  cancel: "Bonjour {prenom}, votre RDV du {date} à {heure} avec Laeti'Bienfaits est ANNULÉ. Pour reprendre RDV appelez le 06 73 96 21 83. Ne pas répondre à ce SMS.",
 };
 function smsTemplates() { return Object.assign({}, DEFAULT_TPL, readJson(TPL_FILE, {})); }
 function firstNameOf(b) { return b.firstname || String(b.name || '').trim().split(/\s+/)[0] || ''; }
