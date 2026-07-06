@@ -799,6 +799,8 @@ function renderCreate(panel) {
       + '<label class="f-label">Email</label><input class="f-input" id="cr-email" inputmode="email">'
       + '<label class="f-label">Motif / prestation *</label><select class="f-input" id="cr-motif-sel">' + mopts + '</select>'
       + '<input class="f-input" id="cr-motif-other" placeholder="Précisez le motif" style="display:none;margin-top:8px">'
+      + '<label class="f-label" style="margin-top:14px">Informations complémentaires</label>'
+      + '<textarea class="f-input" id="cr-info" rows="3" placeholder="Motif détaillé, suivi, remarques… (facultatif)"></textarea>'
       + '<div class="f-hint" style="margin:2px 0 4px">Vous pouvez choisir n\'importe quel jour et n\'importe quelle heure (par tranche de 15 min), même en dehors des créneaux proposés en ligne.</div>'
       + '<div class="cr-2"><div><label class="f-label">Jour *</label><input class="f-input" id="cr-day" type="date"></div><div><label class="f-label">Heure *</label><input class="f-input" id="cr-time" type="time" step="900"></div></div>'
       + '<label class="f-label">Durée (min)</label><input class="f-input" id="cr-dur" type="number" min="15" step="15" value="60">'
@@ -826,14 +828,16 @@ function renderCreate(panel) {
       $('#cr-phone').value = (last && last.phone) || p.phone || '';
       $('#cr-email').value = (last && last.email) || p.email || '';
       setMotif((last && (last.prestation || last.motif)) || p.motif || '');
+      $('#cr-info').value = (last && last.motif && last.motif !== last.prestation) ? last.motif : ''; // infos de la dernière consultation
       if (last && last.durationMin) $('#cr-dur').value = last.durationMin;
     };
     $('#cr-go').onclick = () => {
       const isAutre = mSel.value === '__autre__';
-      const motif = isAutre ? mOther.value.trim() : mSel.value;
-      const v = { firstname: $('#cr-first').value.trim(), lastname: $('#cr-last').value.trim(), phone: $('#cr-phone').value.trim(), email: $('#cr-email').value.trim(), motif: motif, prestation: isAutre ? '' : motif, date: daySel.value, time: timeSel.value, duration: parseInt($('#cr-dur').value, 10) || 60, sendConfirm: $('#cr-sc').checked, sendReminder: $('#cr-sr').checked };
+      const prestation = isAutre ? mOther.value.trim() : mSel.value;
+      const info = $('#cr-info').value.trim();
+      const v = { firstname: $('#cr-first').value.trim(), lastname: $('#cr-last').value.trim(), phone: $('#cr-phone').value.trim(), email: $('#cr-email').value.trim(), prestation: prestation, motif: info, date: daySel.value, time: timeSel.value, duration: parseInt($('#cr-dur').value, 10) || 60, sendConfirm: $('#cr-sc').checked, sendReminder: $('#cr-sr').checked };
       const err = $('#cr-err'); err.textContent = '';
-      if (!v.firstname || !v.lastname || !v.motif) { err.textContent = 'Prénom, nom et motif (prestation ou « Autre ») sont obligatoires.'; return; }
+      if (!v.firstname || !v.lastname || !prestation) { err.textContent = 'Prénom, nom et motif / prestation sont obligatoires.'; return; }
       if (!v.date || !v.time) { err.textContent = 'Choisissez un créneau libre.'; return; }
       const isMob = isMobilePhone(v.phone);
       if ((v.sendConfirm || v.sendReminder) && !isMob) { if (!confirm('Téléphone absent ou non mobile : les SMS ne pourront pas être envoyés. Créer quand même le rendez-vous ?')) return; }
