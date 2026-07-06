@@ -709,7 +709,7 @@ function smsConfirmModal(title, checks, defaultText, isMobile, onValidate) {
 
 /* ---------- modale « Déplacer le rendez-vous » -------------------------- */
 function rescheduleModal(b, isMobile, onValidate) {
-  const RESCHED_TPL = "Bonjour {prenom}, votre rendez-vous avec Laeti'Bienfaits est deplace au {date} a {heure}. A bientot !";
+  const RESCHED_TPL = "Bonjour {prenom}, votre rendez-vous avec Laeti'Bienfaits est deplace au {date} a {heure}. Ne pas repondre a ce SMS.";
   const ov = document.createElement('div'); ov.className = 'cm-ov';
   const box = document.createElement('div'); box.className = 'cm-box';
   let html = '<h3 class="cm-title">Déplacer le rendez-vous</h3>';

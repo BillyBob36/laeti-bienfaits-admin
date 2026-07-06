@@ -350,10 +350,10 @@ function frWhen(b) { const p = b.date.split('-'); return p[2] + '/' + p[1] + '/'
 // --- Modèles de SMS (éditables par Laetitia depuis la console) ---
 const TPL_FILE = path.join(DATA_DIR, 'sms_templates.json');
 const DEFAULT_TPL = {
-  confirm: "Bonjour {prenom}, votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits est CONFIRME. A bientot !",
-  reminder: "Rappel : votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits, c'est dans 2 jours. A bientot !",
-  refuse: "Bonjour {prenom}, votre demande de RDV du {date} a {heure} n'a pas pu etre retenue. Rappelez le 06 73 96 21 83 pour convenir d'un autre creneau.",
-  cancel: "Bonjour {prenom}, votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits a ete ANNULE. Pour reprendre RDV, appelez le 06 73 96 21 83. A bientot !",
+  confirm: "Bonjour {prenom}, votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits est CONFIRME. A bientot ! Ne pas repondre a ce SMS.",
+  reminder: "Rappel : votre rendez-vous du {date} a {heure} avec Laeti'Bienfaits, c'est dans 2 jours. A bientot ! Ne pas repondre a ce SMS.",
+  refuse: "Bonjour {prenom}, votre demande de RDV du {date} a {heure} n'a pu etre retenue. Appelez le 06 73 96 21 83 pour un autre creneau. Ne pas repondre a ce SMS.",
+  cancel: "Bonjour {prenom}, votre RDV du {date} a {heure} avec Laeti'Bienfaits est ANNULE. Pour reprendre RDV appelez le 06 73 96 21 83. Ne pas repondre a ce SMS.",
 };
 function smsTemplates() { return Object.assign({}, DEFAULT_TPL, readJson(TPL_FILE, {})); }
 function firstNameOf(b) { return b.firstname || String(b.name || '').trim().split(/\s+/)[0] || ''; }
