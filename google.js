@@ -132,4 +132,26 @@ async function blockedDays(fromISO, toISO) {
   } catch (e) { console.warn('[google] blockedDays err : ' + e.message); return []; }
 }
 
-module.exports = { enabled, createEvent, confirmEvent, deleteEvent, updateEvent, busyRanges, blockedDays };
+// Événements « à heure fixe » qui occupent du temps (avec leur ID, pour pouvoir exclure un RDV de lui-même).
+let btcache = { key: '', at: 0, val: [] };
+async function busyTimed(fromISO, toISO) {
+  if (!enabled()) return [];
+  const key = fromISO + '|' + toISO;
+  if (btcache.key === key && Date.now() - btcache.at < 30000) return btcache.val;
+  const t = await getToken(); if (!t) return [];
+  try {
+    const url = calUrl() + '?singleEvents=true&showDeleted=false&maxResults=2500&timeMin=' + encodeURIComponent(fromISO) + '&timeMax=' + encodeURIComponent(toISO);
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + t } });
+    const j = await r.json();
+    const val = [];
+    (j.items || []).forEach((ev) => {
+      if (ev.status === 'cancelled') return;
+      if (ev.transparency === 'transparent') return; // marqué « Disponible » -> n'occupe pas
+      if (ev.start && ev.start.dateTime && ev.end && ev.end.dateTime) val.push({ id: ev.id, start: ev.start.dateTime, end: ev.end.dateTime });
+    });
+    btcache = { key: key, at: Date.now(), val: val };
+    return val;
+  } catch (e) { console.warn('[google] busyTimed err : ' + e.message); return []; }
+}
+
+module.exports = { enabled, createEvent, confirmEvent, deleteEvent, updateEvent, busyRanges, blockedDays, busyTimed };

@@ -168,6 +168,25 @@ function dowOf(ds) {
   const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', weekday: 'short' }).format(new Date(ds + 'T12:00:00Z'));
   return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wd);
 }
+// Le créneau (date/heure/durée) est-il occupé dans l'agenda Google ? (congés « journée entière » OU événement à heure fixe)
+// excludeId = gcalId à ignorer (pour ne pas bloquer un RDV sur lui-même lors d'un déplacement).
+async function googleConflict(date, time, durMin, excludeId) {
+  if (!google.enabled()) return false;
+  const fromISO = new Date(date + 'T00:00:00Z').toISOString();
+  const toISO = new Date(date + 'T23:59:59Z').toISOString();
+  const t = hm(time), end = t + durMin;
+  try { const bd = await google.blockedDays(fromISO, toISO); if (bd.indexOf(date) >= 0) return true; } catch (e) {}
+  try {
+    const evs = await google.busyTimed(fromISO, toISO);
+    return evs.some((ev) => {
+      if (excludeId && ev.id === excludeId) return false;
+      const s = parisParts(new Date(ev.start)), e = parisParts(new Date(ev.end));
+      if (s.date === date && e.date === date) return overlap(s.minutes, e.minutes, t, end);
+      return s.date <= date && e.date >= date && !(e.date === date && e.minutes <= 0);
+    });
+  } catch (e) {}
+  return false;
+}
 
 // Disponibilités
 app.get('/api/availability', (req, res) => res.json(readJson(AVAIL_FILE, DEFAULT_AVAIL)));
@@ -293,7 +312,7 @@ app.post('/api/booking', (req, res) => {
 // Liste des demandes (console)
 app.get('/api/bookings', requireAuth, (req, res) => res.json(readJson(BOOK_FILE, [])));
 // Accepter / refuser / ajuster (console)
-app.post('/api/bookings/:id', requireAuth, (req, res) => {
+app.post('/api/bookings/:id', requireAuth, async (req, res) => {
   const books = readJson(BOOK_FILE, []);
   const i = books.findIndex((x) => x.id === req.params.id);
   if (i < 0) return res.status(404).json({ error: 'Demande introuvable.' });
@@ -306,6 +325,7 @@ app.post('/api/bookings/:id', requireAuth, (req, res) => {
     const ndur = u.durationMin ? Math.max(15, parseInt(u.durationMin, 10)) : (b0.durationMin || 60);
     const clash = books.some((x, j) => j !== i && (x.status === 'pending' || x.status === 'confirmed') && x.date === nd && overlap(hm(x.time), hm(x.time) + (x.durationMin || ndur), hm(nt), hm(nt) + ndur));
     if (clash) return res.status(409).json({ error: "Ce créneau est déjà pris par un autre rendez-vous. Choisissez une autre date ou une autre heure." });
+    if (await googleConflict(nd, nt, ndur, b0.gcalId)) return res.status(409).json({ error: "Ce créneau est occupé dans votre agenda Google (congés ou autre événement). Choisissez un autre moment." });
     if (typeof u.firstname === 'string') b0.firstname = u.firstname.trim().slice(0, 60);
     if (typeof u.lastname === 'string') b0.lastname = u.lastname.trim().slice(0, 60);
     if (b0.firstname || b0.lastname) b0.name = ((b0.firstname || '') + ' ' + (b0.lastname || '')).trim();
@@ -551,7 +571,7 @@ app.post('/api/patients/import', requireAuth, (req, res) => {
 // ============================================================================
 // CRÉATION DE RDV PAR LAETITIA (confirmé direct) — Lot 3
 // ============================================================================
-app.post('/api/rdv-create', requireAuth, (req, res) => {
+app.post('/api/rdv-create', requireAuth, async (req, res) => {
   const b = req.body || {};
   const firstname = String(b.firstname || '').trim(), lastname = String(b.lastname || '').trim();
   const phone = String(b.phone || '').trim();
@@ -564,6 +584,7 @@ app.post('/api/rdv-create', requireAuth, (req, res) => {
   const books = readJson(BOOK_FILE, []);
   const clash = books.some((x) => (x.status === 'pending' || x.status === 'confirmed') && x.date === date && overlap(hm(x.time), hm(x.time) + (x.durationMin || dur), hm(time), hm(time) + dur));
   if (clash) return res.status(409).json({ error: "Ce créneau est déjà occupé, choisissez-en un autre." });
+  if (await googleConflict(date, time, dur, null)) return res.status(409).json({ error: "Ce créneau est occupé dans votre agenda Google (congés ou autre événement). Choisissez un autre moment." });
   const rec = {
     id: newId(), token: crypto.randomBytes(16).toString('hex'),
     name: (firstname + ' ' + lastname).trim(), firstname, lastname,
