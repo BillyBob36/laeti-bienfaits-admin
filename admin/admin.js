@@ -619,7 +619,8 @@ function renderDem(panel, list) {
   panel.innerHTML = '';
   if (!Array.isArray(list) || !list.length) { panel.innerHTML = '<p class="sec-intro">Aucune demande de rendez-vous pour le moment.</p>'; return; }
   const ord = { pending: 0, confirmed: 1, refused: 2, cancelled: 3 };
-  list = list.slice().sort((a, b) => (ord[a.status] - ord[b.status]) || ((a.date + a.time) < (b.date + b.time) ? -1 : 1));
+  // « En attente » d'abord (à traiter), puis classement alphabétique par nom du patient.
+  list = list.slice().sort((a, b) => (ord[a.status] - ord[b.status]) || patSort(a, b));
   function applyDecision(b, status, durationMin, opts, card) {
     card.style.opacity = '.5';
     api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ status: status, durationMin: durationMin }, opts)) })
@@ -635,11 +636,10 @@ function renderDem(panel, list) {
   function editBookingRdv(b, card) {
     const isMob = isMobilePhone(b.phone);
     editBookingModal(b, isMob, (s) => {
-      card.style.opacity = '.5';
       const payload = Object.assign({ reschedule: true }, s.fields, { sendReschedule: !!s.sms, customSms: (s.sms ? s.text : undefined) });
-      api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-        .then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then((res) => { if (!res.ok) throw new Error((res.j && res.j.error) || 'Erreur'); toast('✓ Rendez-vous modifié.'); Object.assign(b, s.fields); b.name = ((s.fields.firstname || '') + ' ' + (s.fields.lastname || '')).trim(); renderDem(panel, list); })
-        .catch((e) => { toast('⚠ ' + e.message, true); card.style.opacity = '1'; });
+      // Renvoie une promesse : la fenêtre reste ouverte et affiche l'erreur si le créneau est déjà pris (409).
+      return api('/api/bookings/' + b.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        .then((r) => r.json().then((j) => ({ ok: r.ok, j }))).then((res) => { if (!res.ok) throw new Error((res.j && res.j.error) || 'Erreur'); toast('✓ Rendez-vous modifié.'); Object.assign(b, s.fields); b.name = ((s.fields.firstname || '') + ' ' + (s.fields.lastname || '')).trim(); renderDem(panel, list); });
     });
   }
   function decide(b, status, durationMin, card) {
@@ -652,33 +652,44 @@ function renderDem(panel, list) {
       }
     }).catch(() => applyDecision(b, status, durationMin, {}, card));
   }
-  list.forEach((b) => {
-    const card = document.createElement('div'); card.className = 'dem dem-' + b.status;
-    const st = b.status === 'pending' ? '<span class="badge wait">En attente</span>' : b.status === 'confirmed' ? '<span class="badge ok">Confirmé</span>' : b.status === 'cancelled' ? '<span class="badge no">Annulé</span>' : '<span class="badge no">Refusé</span>';
-    const when = b.date.split('-').reverse().join('/') + ' à ' + b.time;
-    card.innerHTML = '<div class="dem-h"><b>' + esc(b.name) + '</b> ' + st + '</div>'
-      + '<div class="dem-i">📞 ' + esc(b.phone) + ' · ' + esc(b.prestation || '—') + '</div>'
-      + (b.motif && b.motif !== b.prestation ? '<div class="dem-i" style="font-style:italic;color:#4a5744">📝 ' + esc(b.motif) + '</div>' : '')
-      + '<div class="dem-w">🗓 ' + when + ' · ' + b.durationMin + ' min</div>';
-    if (b.status === 'pending') {
-      const act = document.createElement('div'); act.className = 'dem-act';
-      const lbl = document.createElement('span'); lbl.className = 'dem-durlbl'; lbl.textContent = 'Durée :';
-      const dur = document.createElement('input'); dur.type = 'number'; dur.className = 'dem-dur'; dur.value = b.durationMin; dur.min = 15; dur.step = 15;
-      const ok = document.createElement('button'); ok.className = 'dem-ok'; ok.textContent = '✅ Accepter';
-      const no = document.createElement('button'); no.className = 'dem-no'; no.textContent = '❌ Refuser';
-      ok.onclick = () => decide(b, 'confirmed', parseInt(dur.value, 10) || b.durationMin, card);
-      no.onclick = () => decide(b, 'refused', null, card);
-      act.append(lbl, dur, ok, no); card.appendChild(act);
-    } else if (b.status === 'confirmed') {
-      const act = document.createElement('div'); act.className = 'dem-act';
-      const mo = document.createElement('button'); mo.className = 'dem-edit'; mo.textContent = '✏️ Modifier';
-      mo.onclick = () => editBookingRdv(b, card);
-      const cx = document.createElement('button'); cx.className = 'dem-no'; cx.textContent = '🗑 Annuler le RDV';
-      cx.onclick = () => cancelRdv(b, card);
-      act.append(mo, cx); card.appendChild(act);
-    }
-    panel.appendChild(card);
-  });
+  const search = document.createElement('input'); search.className = 'f-input pat-search'; search.type = 'search'; search.autocomplete = 'off'; search.placeholder = 'Rechercher un patient (nom ou prénom)…';
+  panel.appendChild(search);
+  const listWrap = document.createElement('div'); panel.appendChild(listWrap);
+  function draw() {
+    const nq = normName(search.value.trim());
+    listWrap.innerHTML = '';
+    const shown = list.filter((b) => patMatch(b, nq) || normName(b.name).indexOf(nq) === 0);
+    if (!shown.length) { listWrap.innerHTML = '<p class="sec-intro">Aucun rendez-vous ne correspond à « ' + esc(search.value.trim()) + ' ».</p>'; return; }
+    shown.forEach((b) => {
+      const card = document.createElement('div'); card.className = 'dem dem-' + b.status;
+      const st = b.status === 'pending' ? '<span class="badge wait">En attente</span>' : b.status === 'confirmed' ? '<span class="badge ok">Confirmé</span>' : b.status === 'cancelled' ? '<span class="badge no">Annulé</span>' : '<span class="badge no">Refusé</span>';
+      const when = b.date.split('-').reverse().join('/') + ' à ' + b.time;
+      card.innerHTML = '<div class="dem-h"><b>' + esc(b.name) + '</b> ' + st + '</div>'
+        + '<div class="dem-i">📞 ' + esc(b.phone) + ' · ' + esc(b.prestation || '—') + '</div>'
+        + (b.motif && b.motif !== b.prestation ? '<div class="dem-i" style="font-style:italic;color:#4a5744">📝 ' + esc(b.motif) + '</div>' : '')
+        + '<div class="dem-w">🗓 ' + when + ' · ' + b.durationMin + ' min</div>';
+      if (b.status === 'pending') {
+        const act = document.createElement('div'); act.className = 'dem-act';
+        const lbl = document.createElement('span'); lbl.className = 'dem-durlbl'; lbl.textContent = 'Durée :';
+        const dur = document.createElement('input'); dur.type = 'number'; dur.className = 'dem-dur'; dur.value = b.durationMin; dur.min = 15; dur.step = 15;
+        const ok = document.createElement('button'); ok.className = 'dem-ok'; ok.textContent = '✅ Accepter';
+        const no = document.createElement('button'); no.className = 'dem-no'; no.textContent = '❌ Refuser';
+        ok.onclick = () => decide(b, 'confirmed', parseInt(dur.value, 10) || b.durationMin, card);
+        no.onclick = () => decide(b, 'refused', null, card);
+        act.append(lbl, dur, ok, no); card.appendChild(act);
+      } else if (b.status === 'confirmed') {
+        const act = document.createElement('div'); act.className = 'dem-act';
+        const mo = document.createElement('button'); mo.className = 'dem-edit'; mo.textContent = '✏️ Modifier';
+        mo.onclick = () => editBookingRdv(b, card);
+        const cx = document.createElement('button'); cx.className = 'dem-no'; cx.textContent = '🗑 Annuler le RDV';
+        cx.onclick = () => cancelRdv(b, card);
+        act.append(mo, cx); card.appendChild(act);
+      }
+      listWrap.appendChild(card);
+    });
+  }
+  search.addEventListener('input', draw);
+  draw();
 }
 
 /* ---------- aperçu d'un SMS (variables remplacées côté client) ----------- */
@@ -733,6 +744,7 @@ function editBookingModal(b, isMobile, onValidate) {
   if (!isMobile) html += '<div class="cm-warn">⚠ Le numéro n\'est pas un mobile : aucun SMS ne pourra être envoyé.</div>';
   html += '<button type="button" class="cm-custom-toggle">✏️ Personnaliser le SMS</button>';
   html += '<textarea class="cm-text" rows="3" style="display:none"></textarea>';
+  html += '<div class="cm-err" style="color:#b0392b;font-size:14px;min-height:18px;margin:8px 0 0"></div>';
   html += '<div class="cm-act"><button type="button" class="cm-cancel">Annuler</button><button type="button" class="cm-ok">Enregistrer</button></div>';
   box.innerHTML = html; ov.appendChild(box); document.body.appendChild(ov);
   const q = (k) => box.querySelector('[data-k="' + k + '"]');
@@ -745,18 +757,25 @@ function editBookingModal(b, isMobile, onValidate) {
   box.querySelector('.cm-custom-toggle').onclick = () => { customOn = !customOn; ta.style.display = customOn ? 'block' : 'none'; box.querySelector('.cm-custom-toggle').classList.toggle('on', customOn); };
   function close() { ov.remove(); }
   box.querySelector('.cm-cancel').onclick = close; ov.onclick = (e) => { if (e.target === ov) close(); };
-  box.querySelector('.cm-ok').onclick = () => {
+  const errEl = box.querySelector('.cm-err'), okBtn = box.querySelector('.cm-ok');
+  okBtn.onclick = () => {
     const first = q('first').value.trim(), last = q('last').value.trim();
     const isAutre = mSel.value === '__autre__';
     const prestation = isAutre ? mOther.value.trim() : mSel.value;
     const date = dEl.value, time = tEl.value;
-    if (!first || !last) { toast('Prénom et nom obligatoires.', true); return; }
-    if (!prestation) { toast('Motif / prestation obligatoire.', true); return; }
-    if (!date || !time) { toast('Choisissez une date et une heure.', true); return; }
+    errEl.textContent = '';
+    if (!first || !last) { errEl.textContent = 'Prénom et nom obligatoires.'; return; }
+    if (!prestation) { errEl.textContent = 'Motif / prestation obligatoire.'; return; }
+    if (!date || !time) { errEl.textContent = 'Choisissez une date et une heure.'; return; }
     preview();
     const fields = { firstname: first, lastname: last, phone: q('phone').value.trim(), email: q('email').value.trim(), prestation: prestation, motif: q('info').value.trim(), date: date, time: time, durationMin: parseInt(q('dur').value, 10) || (b.durationMin || 60) };
-    const sms = !!q('sms').checked, text = ta.value; close();
-    onValidate({ fields: fields, sms: sms, text: text });
+    const sms = !!q('sms').checked, text = ta.value;
+    const result = onValidate({ fields: fields, sms: sms, text: text });
+    // Si la validation renvoie une promesse : la fenêtre reste ouverte et affiche l'erreur (ex. créneau déjà pris) au lieu de se fermer.
+    if (result && typeof result.then === 'function') {
+      okBtn.disabled = true; okBtn.textContent = '⏳…';
+      result.then(() => close()).catch((e) => { errEl.textContent = (e && e.message) || 'Ce créneau n\'est pas disponible. Choisissez une autre date ou heure.'; okBtn.disabled = false; okBtn.textContent = 'Enregistrer'; });
+    } else { close(); }
   };
 }
 

@@ -305,7 +305,7 @@ app.post('/api/bookings/:id', requireAuth, (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nd) || !/^\d{2}:\d{2}$/.test(nt)) return res.status(400).json({ error: 'Date ou heure invalide.' });
     const ndur = u.durationMin ? Math.max(15, parseInt(u.durationMin, 10)) : (b0.durationMin || 60);
     const clash = books.some((x, j) => j !== i && (x.status === 'pending' || x.status === 'confirmed') && x.date === nd && overlap(hm(x.time), hm(x.time) + (x.durationMin || ndur), hm(nt), hm(nt) + ndur));
-    if (clash) return res.status(409).json({ error: "Ce créneau est déjà occupé, choisissez-en un autre." });
+    if (clash) return res.status(409).json({ error: "Ce créneau est déjà pris par un autre rendez-vous. Choisissez une autre date ou une autre heure." });
     if (typeof u.firstname === 'string') b0.firstname = u.firstname.trim().slice(0, 60);
     if (typeof u.lastname === 'string') b0.lastname = u.lastname.trim().slice(0, 60);
     if (b0.firstname || b0.lastname) b0.name = ((b0.firstname || '') + ' ' + (b0.lastname || '')).trim();
