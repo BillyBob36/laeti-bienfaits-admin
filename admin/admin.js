@@ -536,10 +536,10 @@ const RDV_JOURS = [['1', 'Lundi'], ['2', 'Mardi'], ['3', 'Mercredi'], ['4', 'Jeu
 
 function renderRdv(c) {
   const bar = document.createElement('div'); bar.className = 'rdv-tabs';
-  const bD = document.createElement('button'); bD.className = 'rdv-tab active'; bD.textContent = '📅 Mes disponibilités';
-  const bC = document.createElement('button'); bC.className = 'rdv-tab'; bC.textContent = '➕ Nouveau RDV';
+  const bD = document.createElement('button'); bD.className = 'rdv-tab'; bD.textContent = '📅 Mes disponibilités';
+  const bC = document.createElement('button'); bC.className = 'rdv-tab active'; bC.textContent = '➕ Nouveau RDV';
   const bR = document.createElement('button'); bR.className = 'rdv-tab'; bR.textContent = '📨 Demandes';
-  bar.append(bD, bC, bR); c.appendChild(bar);
+  bar.append(bC, bR, bD); c.appendChild(bar);
   const panel = document.createElement('div'); c.appendChild(panel);
   function loading() { panel.innerHTML = '<p style="color:#6f7c69;padding:10px">Chargement…</p>'; }
   function loadDispo() { loading(); api('/api/availability').then((r) => r.json()).then((av) => renderDispo(panel, av)).catch(() => { panel.innerHTML = '<p>Erreur de chargement.</p>'; }); }
@@ -548,7 +548,7 @@ function renderRdv(c) {
   bD.onclick = () => tab(bD, loadDispo);
   bC.onclick = () => tab(bC, () => renderCreate(panel));
   bR.onclick = () => tab(bR, loadDem);
-  loadDispo();
+  renderCreate(panel); // « Nouveau RDV » affiché en premier
 }
 
 const DISPO_FIXED = ['09:30', '11:00', '14:00', '15:30'];
