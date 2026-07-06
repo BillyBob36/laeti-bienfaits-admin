@@ -532,6 +532,9 @@ function toast(msg, isErr) {
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 // Tri alphabétique des patients sur le nom affiché (prénom + nom), insensible aux accents/majuscules.
 function patSort(a, b) { return (((a.firstname || '') + ' ' + (a.lastname || '')).trim()).localeCompare(((b.firstname || '') + ' ' + (b.lastname || '')).trim(), 'fr', { sensitivity: 'base' }); }
+// Recherche : normalise (minuscules, sans accents) et teste si le nom OU le prénom commence par la saisie.
+function normName(s) { return String(s || '').toLowerCase().normalize('NFD').split('').filter(function (c) { var k = c.charCodeAt(0); return k < 0x300 || k > 0x36f; }).join(''); }
+function patMatch(p, nq) { if (!nq) return true; const f = normName(p.firstname), l = normName(p.lastname); return f.indexOf(nq) === 0 || l.indexOf(nq) === 0 || (f + ' ' + l).indexOf(nq) === 0 || (l + ' ' + f).indexOf(nq) === 0; }
 const RDV_JOURS = [['1', 'Lundi'], ['2', 'Mardi'], ['3', 'Mercredi'], ['4', 'Jeudi'], ['5', 'Vendredi'], ['6', 'Samedi'], ['0', 'Dimanche']];
 
 function renderRdv(c) {
@@ -797,22 +800,34 @@ function renderPatients(c) {
     add.onclick = () => patientModal({}, load);
     exp.onclick = () => api('/api/patients/export').then((r) => r.text()).then((csv) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'patients.csv'; a.click(); URL.revokeObjectURL(a.href); });
     impf.onchange = () => { const f = impf.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => api('/api/patients/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv: rd.result }) }).then((r) => r.json()).then((d) => { toast('✓ ' + (d.added || 0) + ' ajouté(s), ' + (d.updated || 0) + ' mis à jour.'); load(); }).catch(() => toast('⚠ Échec import.', true)); rd.readAsText(f); };
-    if (!list.length) { const e = document.createElement('p'); e.className = 'sec-intro'; e.textContent = 'Aucun patient pour le moment.'; wrap.appendChild(e); }
-    list.slice().sort(patSort).forEach((p) => {
-      const card = document.createElement('div'); card.className = 'list-item acc';
-      const head = document.createElement('div'); head.className = 'list-head';
-      const chev = document.createElement('span'); chev.className = 'acc-chev';
-      const title = document.createElement('span'); title.className = 'list-title'; title.textContent = ((p.firstname || '') + ' ' + (p.lastname || '')).trim() || '(sans nom)';
-      const tools = document.createElement('div'); tools.className = 'list-tools';
-      const del = document.createElement('button'); del.className = 'btn-icon danger'; del.textContent = '🗑';
-      del.onclick = (e) => { e.stopPropagation(); if (confirm('Supprimer ' + title.textContent + ' ?')) api('/api/patients/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) }).then(() => { toast('Patient supprimé.'); load(); }); };
-      tools.appendChild(del); head.append(chev, title, tools); card.appendChild(head);
-      const body = document.createElement('div'); body.className = 'acc-body';
-      body.innerHTML = '<div class="pat-line">📞 ' + esc(p.phone || '—') + (p.email ? ' · ✉ ' + esc(p.email) : '') + '</div>' + (p.motif ? '<div class="pat-line">' + esc(p.motif) + '</div>' : '') + (p.notes ? '<div class="pat-line" style="color:#6f7c69">' + esc(p.notes) + '</div>' : '');
-      const ed = document.createElement('button'); ed.className = 'btn-mini'; ed.textContent = '✏️ Modifier'; ed.style.marginTop = '8px'; ed.onclick = () => patientModal(p, load); body.appendChild(ed); card.appendChild(body);
-      head.addEventListener('click', (e) => { if (e.target.closest('.list-tools')) return; const o = card.classList.contains('open'); wrap.querySelectorAll('.list-item.open').forEach((x) => x.classList.remove('open')); if (!o) card.classList.add('open'); });
-      wrap.appendChild(card);
-    });
+    const search = document.createElement('input'); search.className = 'f-input pat-search'; search.type = 'search'; search.autocomplete = 'off'; search.placeholder = 'Rechercher un patient (nom ou prénom)…';
+    wrap.appendChild(search);
+    const listWrap = document.createElement('div'); wrap.appendChild(listWrap);
+    const sorted = list.slice().sort(patSort);
+    function renderCards() {
+      const nq = normName(search.value.trim());
+      listWrap.innerHTML = '';
+      if (!list.length) { const e = document.createElement('p'); e.className = 'sec-intro'; e.textContent = 'Aucun patient pour le moment.'; listWrap.appendChild(e); return; }
+      const shown = sorted.filter((p) => patMatch(p, nq));
+      if (!shown.length) { const e = document.createElement('p'); e.className = 'sec-intro'; e.textContent = 'Aucun patient ne correspond à « ' + search.value.trim() + ' ».'; listWrap.appendChild(e); return; }
+      shown.forEach((p) => {
+        const card = document.createElement('div'); card.className = 'list-item acc';
+        const head = document.createElement('div'); head.className = 'list-head';
+        const chev = document.createElement('span'); chev.className = 'acc-chev';
+        const title = document.createElement('span'); title.className = 'list-title'; title.textContent = ((p.firstname || '') + ' ' + (p.lastname || '')).trim() || '(sans nom)';
+        const tools = document.createElement('div'); tools.className = 'list-tools';
+        const del = document.createElement('button'); del.className = 'btn-icon danger'; del.textContent = '🗑';
+        del.onclick = (e) => { e.stopPropagation(); if (confirm('Supprimer ' + title.textContent + ' ?')) api('/api/patients/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) }).then(() => { toast('Patient supprimé.'); load(); }); };
+        tools.appendChild(del); head.append(chev, title, tools); card.appendChild(head);
+        const body = document.createElement('div'); body.className = 'acc-body';
+        body.innerHTML = '<div class="pat-line">📞 ' + esc(p.phone || '—') + (p.email ? ' · ✉ ' + esc(p.email) : '') + '</div>' + (p.motif ? '<div class="pat-line">' + esc(p.motif) + '</div>' : '') + (p.notes ? '<div class="pat-line" style="color:#6f7c69">' + esc(p.notes) + '</div>' : '');
+        const ed = document.createElement('button'); ed.className = 'btn-mini'; ed.textContent = '✏️ Modifier'; ed.style.marginTop = '8px'; ed.onclick = () => patientModal(p, load); body.appendChild(ed); card.appendChild(body);
+        head.addEventListener('click', (e) => { if (e.target.closest('.list-tools')) return; const o = card.classList.contains('open'); listWrap.querySelectorAll('.list-item.open').forEach((x) => x.classList.remove('open')); if (!o) card.classList.add('open'); });
+        listWrap.appendChild(card);
+      });
+    }
+    search.addEventListener('input', renderCards);
+    renderCards();
   }
   load();
 }
@@ -850,13 +865,12 @@ function renderCreate(panel) {
     const intro = document.createElement('p'); intro.className = 'sec-intro'; intro.textContent = 'Créez un rendez-vous vous-même (appel, en direct…). Il est confirmé immédiatement, ajouté à votre agenda Google, et un SMS peut partir au patient.';
     panel.appendChild(intro);
     const form = document.createElement('div'); form.className = 'cr-form';
-    let opts = '<option value="">— Nouveau patient —</option>';
-    patients.slice().sort(patSort).forEach((p) => { opts += '<option value="' + p.id + '">' + esc(((p.firstname || '') + ' ' + (p.lastname || '')).trim() + (p.phone ? ' · ' + p.phone : '')) + '</option>'; });
     let mopts = '<option value="">— Choisir —</option>';
     prestas.forEach((p) => { mopts += '<option value="' + esc(p.name) + '" data-dur="' + (p.duration || 0) + '">' + esc(p.name) + (p.duration ? ' (' + p.duration + ' min)' : '') + '</option>'; });
     mopts += '<option value="__autre__">Autre…</option>';
     form.innerHTML =
-      '<label class="f-label">Patient existant</label><select class="f-input" id="cr-pat">' + opts + '</select>'
+      '<label class="f-label">Patient existant</label>'
+      + '<div class="cr-pat-wrap"><input class="f-input" id="cr-pat-search" type="search" autocomplete="off" placeholder="Tapez les premières lettres du nom ou du prénom…"><div class="cr-pat-list" id="cr-pat-list" style="display:none"></div></div>'
       + '<div class="cr-2"><div><label class="f-label">Prénom *</label><input class="f-input" id="cr-first"></div><div><label class="f-label">Nom *</label><input class="f-input" id="cr-last"></div></div>'
       + '<label class="f-label">Téléphone *</label><input class="f-input" id="cr-phone" inputmode="tel">'
       + '<label class="f-label">Email</label><input class="f-input" id="cr-email" inputmode="email">'
@@ -881,8 +895,7 @@ function renderCreate(panel) {
     timeSel.value = '09:30';
     mSel.onchange = () => { if (mSel.value === '__autre__') { mOther.style.display = 'block'; mOther.focus(); } else { mOther.style.display = 'none'; const o = mSel.options[mSel.selectedIndex]; const d = o && parseInt(o.getAttribute('data-dur'), 10); if (d) $('#cr-dur').value = d; } };
     function setMotif(motif) { if (!motif) { mSel.value = ''; mOther.style.display = 'none'; mOther.value = ''; return; } const match = prestas.find((p) => p.name === motif); if (match) { mSel.value = motif; mOther.style.display = 'none'; mOther.value = ''; } else { mSel.value = '__autre__'; mOther.style.display = 'block'; mOther.value = motif; } }
-    $('#cr-pat').onchange = () => {
-      const p = patients.find((x) => x.id === $('#cr-pat').value); if (!p) return;
+    function fillFromPatient(p) {
       const k = String(p.phone || '').replace(/[^0-9]/g, '');
       const hist = bookings.filter((b) => k && String(b.phone || '').replace(/[^0-9]/g, '') === k).sort((a, b) => ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || '')));
       const last = hist[0];
@@ -893,7 +906,26 @@ function renderCreate(panel) {
       setMotif((last && (last.prestation || last.motif)) || p.motif || '');
       $('#cr-info').value = (last && last.motif && last.motif !== last.prestation) ? last.motif : ''; // infos de la dernière consultation
       if (last && last.durationMin) $('#cr-dur').value = last.durationMin;
-    };
+    }
+    // Recherche patient : filtre « commence par » sur le nom OU le prénom
+    const patSearch = $('#cr-pat-search'), patList = $('#cr-pat-list');
+    function renderPatResults() {
+      const nq = normName(patSearch.value.trim());
+      patList.innerHTML = '';
+      if (!nq) { patList.style.display = 'none'; return; }
+      const matches = patients.filter((p) => patMatch(p, nq)).sort(patSort).slice(0, 40);
+      if (!matches.length) { patList.innerHTML = '<div class="cr-pat-empty">Aucun patient trouvé — remplissez les champs pour créer un nouveau patient.</div>'; patList.style.display = 'block'; return; }
+      matches.forEach((p) => {
+        const row = document.createElement('div'); row.className = 'cr-pat-item';
+        row.textContent = ((p.firstname || '') + ' ' + (p.lastname || '')).trim() + (p.phone ? ' · ' + p.phone : '');
+        row.onmousedown = (e) => { e.preventDefault(); fillFromPatient(p); patSearch.value = ((p.firstname || '') + ' ' + (p.lastname || '')).trim(); patList.style.display = 'none'; };
+        patList.appendChild(row);
+      });
+      patList.style.display = 'block';
+    }
+    patSearch.addEventListener('input', renderPatResults);
+    patSearch.addEventListener('focus', renderPatResults);
+    patSearch.addEventListener('blur', () => { setTimeout(() => { patList.style.display = 'none'; }, 150); });
     $('#cr-go').onclick = () => {
       const isAutre = mSel.value === '__autre__';
       const prestation = isAutre ? mOther.value.trim() : mSel.value;
