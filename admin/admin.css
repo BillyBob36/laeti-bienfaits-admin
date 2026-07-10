@@ -131,11 +131,34 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 .dispo-day.closed .dispo-name{color:var(--muted);font-weight:600;}
 .dispo-closed{font-size:12px;color:var(--muted);}
 .dispo-pills{display:flex;flex-wrap:wrap;gap:9px;flex:1;}
-.slot-pill{min-width:70px;height:42px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);background:#fff;color:#9aa392;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;transition:background .12s,border-color .12s,color .12s;}
+.slot-pill{min-width:62px;height:42px;padding:0 11px;border-radius:999px;border:1.5px solid var(--line);background:#fff;color:#9aa392;font-family:inherit;font-size:14.5px;font-weight:700;cursor:pointer;transition:background .12s,border-color .12s,color .12s;}
 .slot-pill:hover{border-color:var(--sage-bd);color:var(--green-soft);}
 .slot-pill.on{background:var(--green-soft);border-color:var(--green-soft);color:#fff;}
 .slot-pill.on:hover{background:#4e6a4b;border-color:#4e6a4b;color:#fff;}
-.slot-pill.pill-gap{margin-left:16px;}
+.slot-pill.pill-gap{margin-left:14px;}
+.pill-break{display:none;}
+/* Sous-onglets « Mes disponibilités » */
+.dispo-subtabs{display:inline-flex;gap:4px;background:var(--cream2);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:18px;max-width:100%;}
+.dispo-subtab{background:transparent;border:0;border-radius:9px;font-family:inherit;font-size:14.5px;font-weight:600;color:var(--muted);padding:9px 16px;cursor:pointer;white-space:nowrap;}
+.dispo-subtab.active{background:#fff;color:var(--green);box-shadow:0 2px 8px -4px rgba(43,58,38,.35);}
+/* Sélecteur de semaine spécifique */
+.wk-pick{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
+.wk-pick .f-label{margin-bottom:8px;}
+.wk-pick .f-input{max-width:260px;}
+.wk-empty{background:var(--cream2);border:1px dashed var(--sage-bd);border-radius:12px;padding:18px;text-align:center;color:var(--green-soft);font-size:14.5px;}
+.wk-selected{display:flex;flex-direction:column;gap:2px;background:var(--green-soft);color:#fff;border-radius:12px;padding:12px 16px;margin-bottom:6px;}
+.wk-selected-lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;opacity:.85;}
+.wk-selected strong{font-size:17px;}
+.wk-hint{font-size:13.5px;color:var(--muted);margin:8px 0 12px;line-height:1.5;}
+.btn-del-wk{display:block;margin-top:10px;background:#fff;border:1px solid #e8b4ad;color:#b0392b;border-radius:10px;padding:10px 16px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;}
+.btn-del-wk:hover{background:#fdecea;}
+.wk-list-title{margin:22px 0 8px;font-weight:700;color:var(--green);font-size:14.5px;}
+.wk-chips{display:flex;flex-wrap:wrap;gap:8px;}
+.wk-chip{display:inline-flex;align-items:stretch;border:1px solid var(--sage-bd);border-radius:10px;overflow:hidden;background:#fff;}
+.wk-chip-open{background:transparent;border:0;font-family:inherit;font-size:13.5px;color:var(--green);padding:8px 12px;cursor:pointer;}
+.wk-chip-open:hover{background:var(--cream2);}
+.wk-chip-del{background:transparent;border:0;border-left:1px solid var(--line);color:#b0392b;padding:8px 10px;cursor:pointer;font-size:13px;}
+.wk-chip-del:hover{background:#fdecea;}
 .rdv-set{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:24px 0 4px;}
 .bd-list{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
 .bd-chip{display:inline-flex;align-items:center;gap:4px;background:#fdecea;border:1px solid #e8b4ad;color:#8a2f23;font-weight:600;font-size:14px;padding:7px 12px;border-radius:999px;}
@@ -207,8 +230,12 @@ textarea.f-input{resize:vertical;line-height:1.55;min-height:72px;}
 .dispo-day{flex-direction:column;align-items:stretch;gap:9px;padding:13px 2px;}
 .dispo-lab{flex:none;}
 .dispo-pills{gap:8px;}
-.slot-pill{flex:1 1 0;min-width:0;padding:0 6px;}
-.slot-pill.pill-gap{margin-left:0;}}
+.slot-pill{flex:1 1 0;min-width:0;padding:0 4px;}
+.slot-pill.pill-gap{margin-left:0;}
+.pill-break{display:block;flex-basis:100%;height:0;margin:0;}
+.dispo-subtabs{display:flex;width:100%;}
+.dispo-subtab{flex:1;padding:9px 8px;font-size:13.5px;}
+.wk-pick .f-input{max-width:none;}}
 
 /* toast + scrim */
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--green);color:#fff;padding:13px 22px;border-radius:12px;font-size:14.5px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:60;box-shadow:0 16px 40px -16px rgba(0,0,0,.5);}

@@ -149,6 +149,7 @@ const AVAIL_FILE = path.join(DATA_DIR, 'availability.json');
 const BOOK_FILE = path.join(DATA_DIR, 'bookings.json');
 const DEFAULT_AVAIL = {
   weekly: { '0': [], '1': [], '2': [], '3': [], '4': [], '5': [], '6': [] }, // 0 = dimanche
+  weekOverrides: {}, // semaines spécifiques : { "<lundi YYYY-MM-DD>": { "0":[...], ..., "6":[...] } }
   slotInterval: 30, defaultDuration: 60, minNoticeHours: 24, horizonDays: 28, blockedDates: [],
 };
 function readJson(file, fb) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fb; } }
@@ -167,6 +168,13 @@ function parisParts(d) {
 function dowOf(ds) {
   const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', weekday: 'short' }).format(new Date(ds + 'T12:00:00Z'));
   return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wd);
+}
+// Lundi (YYYY-MM-DD) de la semaine contenant ds — clé des semaines spécifiques.
+function mondayOf(ds) {
+  const d = new Date(ds + 'T12:00:00Z');
+  const dow = d.getUTCDay(); // 0 = dimanche
+  d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+  return d.toISOString().slice(0, 10);
 }
 // Le créneau (date/heure/durée) est-il occupé dans l'agenda Google ? (congés « journée entière » OU événement à heure fixe)
 // excludeId = gcalId à ignorer (pour ne pas bloquer un RDV sur lui-même lors d'un déplacement).
@@ -236,13 +244,14 @@ app.get('/api/slots', async (req, res) => {
     });
   }
   const out = [];
-  const FIXED = [570, 660, 840, 930]; // créneaux fixes : 09:30, 11:00, 14:00, 15:30
-  const PAIRS = [[570, 660], [840, 930]]; // [1er, 2e] de chaque demi-journée : le 2e se décale si le 1er déborde
+  const FIXED = [570, 660, 750, 840, 930, 1020, 1110]; // créneaux toutes les 1h30 : 09:30,11:00,12:30,14:00,15:30,17:00,18:30
   let cur = fromDate, guard = 0;
   while (cur <= toDate && guard < 400) {
     const ds = cur; cur = nextDate(cur); guard++;
     if ((av.blockedDates || []).indexOf(ds) >= 0 || gBlocked.indexOf(ds) >= 0) continue;
-    const raw = (av.weekly && av.weekly[String(dowOf(ds))]) || [];
+    // Semaine spécifique (override) prioritaire ; sinon modèle par défaut « toutes les semaines ».
+    const wk = av.weekOverrides && av.weekOverrides[mondayOf(ds)];
+    const raw = wk ? (wk[String(dowOf(ds))] || []) : ((av.weekly && av.weekly[String(dowOf(ds))]) || []);
     if (!raw.length) continue;
     // Heures cochées ce jour-là. Nouveau format : ["09:30","11:00"]. Ancien format : [{start,end}] -> heures fixes comprises dans une plage.
     let selMin;
@@ -254,12 +263,15 @@ app.get('/api/slots', async (req, res) => {
     }
     if (!selMin.length) continue;
     const bkDay = taken.filter((b) => b.date === ds).map((b) => ({ s: hm(b.time), e: hm(b.time) + (b.durationMin || dur) }));
-    let cands = FIXED.filter((t) => selMin.indexOf(t) >= 0);
-    // Le 2e créneau d'une demi-journée se décale si le RDV du 1er déborde (ex. 14h en 120 min -> 15h30 devient 16h) — uniquement si ce 2e créneau est proposé.
-    PAIRS.forEach((p) => {
-      if (selMin.indexOf(p[1]) < 0) return;
-      const bk = bkDay.find((b) => b.s === p[0]);
-      if (bk && bk.e > p[1]) { cands = cands.filter((x) => x !== p[1]); cands.push(bk.e); }
+    // Décalage « RDV long » généralisé (cascade) : on parcourt les créneaux cochés dans l'ordre ; si un RDV occupe
+    // un créneau et déborde sur le suivant, ce suivant est proposé à l'heure de fin du RDV (ex. RDV 2h à 15h30 -> 17h00 devient 17h30).
+    const cands = [];
+    let floor = -1;
+    selMin.slice().sort((a, b) => a - b).forEach((t0) => {
+      const t = t0 < floor ? floor : t0;
+      cands.push(t);
+      const bk = bkDay.find((b) => b.s === t0 || b.s === t);
+      if (bk) floor = Math.max(floor, bk.e);
     });
     const slots = [];
     cands.sort((a, b) => a - b).forEach((t) => {

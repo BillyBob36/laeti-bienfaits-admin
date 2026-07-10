@@ -554,65 +554,133 @@ function renderRdv(c) {
   renderCreate(panel); // « Nouveau RDV » affiché en premier
 }
 
-const DISPO_FIXED = ['09:30', '11:00', '14:00', '15:30'];
+const DISPO_FIXED = ['09:30', '11:00', '12:30', '14:00', '15:30', '17:00', '18:30']; // Matin(0-2) · Après-midi(3-4) · Soir(5-6)
 function dispoMin(t) { const p = String(t).split(':'); return (+p[0]) * 60 + (+p[1]); }
-function renderDispo(panel, av) {
-  av.weekly = av.weekly || {};
-  ['defaultDuration', 'slotInterval', 'minNoticeHours', 'horizonDays'].forEach((k) => { if (av[k] == null) av[k] = { defaultDuration: 60, slotInterval: 30, minNoticeHours: 24, horizonDays: 28 }[k]; });
-  // État coché par jour, en lisant le nouveau format (tableau d'heures) OU l'ancien (plages {start,end}).
-  function selectedFor(k) {
-    const raw = av.weekly[k]; const set = {};
-    if (Array.isArray(raw) && raw.length) {
-      if (typeof raw[0] === 'string') { raw.forEach((t) => { set[t] = 1; }); }
-      else { const wins = raw.map((w) => [dispoMin(w.start), dispoMin(w.end)]); DISPO_FIXED.forEach((t) => { const m = dispoMin(t); if (wins.some((w) => w[0] <= m && m < w[1])) set[t] = 1; }); }
-    }
-    return set;
-  }
-  const state = {}; RDV_JOURS.forEach(([k]) => { state[k] = selectedFor(k); });
+// Config d'une semaine (nouveau format tableau OU ancien {start,end}) -> { dow: [heures] }.
+function dispoWeekToByDay(w) {
+  const out = {};
+  RDV_JOURS.forEach(([k]) => {
+    const raw = (w && w[k]) || [];
+    if (Array.isArray(raw) && raw.length && typeof raw[0] === 'object') {
+      const wins = raw.map((x) => [dispoMin(x.start), dispoMin(x.end)]);
+      out[k] = DISPO_FIXED.filter((t) => { const m = dispoMin(t); return wins.some((win) => win[0] <= m && m < win[1]); });
+    } else { out[k] = Array.isArray(raw) ? raw.filter((t) => DISPO_FIXED.indexOf(t) >= 0) : []; }
+  });
+  return out;
+}
+function dispoMonday(ds) { const d = new Date(ds + 'T12:00:00Z'); const dow = d.getUTCDay(); d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow)); return d.toISOString().slice(0, 10); }
+function dispoAddDays(ds, n) { const d = new Date(ds + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function dispoFrDate(ds, withYear) { try { const o = { day: 'numeric', month: 'long' }; if (withYear) o.year = 'numeric'; return new Date(ds + 'T12:00:00Z').toLocaleDateString('fr-FR', o); } catch (e) { return ds; } }
+function dispoWeekLabel(monday) { return 'Semaine du ' + dispoFrDate(monday, false) + ' au ' + dispoFrDate(dispoAddDays(monday, 6), true); }
 
-  panel.innerHTML = '';
-  const help = document.createElement('p'); help.className = 'sec-intro';
-  help.textContent = "Touchez les heures auxquelles vous acceptez des rendez-vous, jour par jour. C'est exactement ce que verront vos clients. Un jour sans aucune heure = fermé.";
-  panel.appendChild(help);
-
+// Grille réutilisable : 7 jours × 7 créneaux (groupés Matin/Après-midi/Soir). Renvoie { getConfig() }.
+function dispoBuildGrid(container, byDay) {
+  const state = {};
+  RDV_JOURS.forEach(([k]) => { state[k] = {}; (byDay[k] || []).forEach((t) => { if (DISPO_FIXED.indexOf(t) >= 0) state[k][t] = 1; }); });
   const grid = document.createElement('div'); grid.className = 'dispo-grid';
   RDV_JOURS.forEach(([k, label]) => {
     const day = document.createElement('div'); day.className = 'dispo-day';
     const lab = document.createElement('div'); lab.className = 'dispo-lab';
-    function refreshLab() {
-      const none = !Object.keys(state[k]).length;
-      day.classList.toggle('closed', none);
-      lab.innerHTML = '<span class="dispo-name">' + label + '</span>' + (none ? '<span class="dispo-closed">fermé</span>' : '');
-    }
+    function refreshLab() { const none = !Object.keys(state[k]).length; day.classList.toggle('closed', none); lab.innerHTML = '<span class="dispo-name">' + label + '</span>' + (none ? '<span class="dispo-closed">fermé</span>' : ''); }
     const pills = document.createElement('div'); pills.className = 'dispo-pills';
     DISPO_FIXED.forEach((t, i) => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'slot-pill' + (i === 2 ? ' pill-gap' : '');
+      if (i === 3 || i === 5) { const br = document.createElement('div'); br.className = 'pill-break'; pills.appendChild(br); } // saut de ligne mobile entre Matin/Après-midi/Soir
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'slot-pill' + (i === 3 || i === 5 ? ' pill-gap' : '');
       b.textContent = t.replace(':', 'h');
       function refresh() { const on = !!state[k][t]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
       b.onclick = () => { if (state[k][t]) delete state[k][t]; else state[k][t] = 1; refresh(); refreshLab(); };
       refresh(); pills.appendChild(b);
     });
-    refreshLab();
-    day.append(lab, pills); grid.appendChild(day);
+    refreshLab(); day.append(lab, pills); grid.appendChild(day);
   });
-  panel.appendChild(grid);
+  container.appendChild(grid);
+  return { getConfig() { const o = {}; RDV_JOURS.forEach(([k]) => { o[k] = DISPO_FIXED.filter((t) => state[k][t]); }); return o; } };
+}
+async function dispoSave(av, okMsg, btn) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Enregistrement…';
+  try { const r = await api('/api/availability', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(av) }); if (!r.ok) throw new Error(); toast('✓ ' + okMsg); }
+  catch (e) { toast('⚠ Échec de l\'enregistrement.', true); }
+  btn.disabled = false; btn.textContent = old;
+}
 
+function renderDispo(panel, av) {
+  av.weekly = av.weekly || {}; av.weekOverrides = av.weekOverrides || {};
+  ['defaultDuration', 'slotInterval', 'minNoticeHours', 'horizonDays'].forEach((k) => { if (av[k] == null) av[k] = { defaultDuration: 60, slotInterval: 30, minNoticeHours: 24, horizonDays: 28 }[k]; });
+  panel.innerHTML = '';
+  const subbar = document.createElement('div'); subbar.className = 'dispo-subtabs';
+  const bAll = document.createElement('button'); bAll.className = 'dispo-subtab active'; bAll.textContent = '📅 Toutes les semaines';
+  const bSpe = document.createElement('button'); bSpe.className = 'dispo-subtab'; bSpe.textContent = '🗓️ Semaines spécifiques';
+  subbar.append(bAll, bSpe); panel.appendChild(subbar);
+  const sub = document.createElement('div'); panel.appendChild(sub);
+  function pick(btn, fn) { [bAll, bSpe].forEach((x) => x.classList.remove('active')); btn.classList.add('active'); fn(); }
+  bAll.onclick = () => pick(bAll, () => renderDispoDefault(sub, av));
+  bSpe.onclick = () => pick(bSpe, () => renderDispoSpecific(sub, av));
+  renderDispoDefault(sub, av);
+}
+
+function renderDispoDefault(sub, av) {
+  sub.innerHTML = '';
+  const help = document.createElement('p'); help.className = 'sec-intro';
+  help.innerHTML = '<strong>Vos horaires habituels</strong>, appliqués à <strong>toutes les semaines</strong>. Touchez les heures où vous acceptez des rendez-vous, jour par jour — c\'est exactement ce que verront vos clients. Un jour sans aucune heure = fermé.';
+  sub.appendChild(help);
+  const g = dispoBuildGrid(sub, dispoWeekToByDay(av.weekly));
   const note = document.createElement('div'); note.className = 'rdv-note';
-  note.innerHTML = '<strong>Congés, absence, ou rendez-vous personnel&nbsp;?</strong><br>Ajoutez l\'événement dans votre <strong>agenda Google</strong> (même une journée entière). Les créneaux concernés se libèrent tout seuls — rien à faire ici.<br><span style="color:#6f7c69">Astuce&nbsp;: si vous acceptez un rendez-vous de 2&nbsp;h à 14&nbsp;h, le 15&nbsp;h30 devient 16&nbsp;h automatiquement.</span>';
-  panel.appendChild(note);
-
+  note.innerHTML = '<strong>Congés, absence, ou rendez-vous personnel&nbsp;?</strong><br>Ajoutez l\'événement dans votre <strong>agenda Google</strong> (même une journée entière) : les créneaux concernés se libèrent tout seuls.<br><span style="color:#6f7c69">Astuce&nbsp;: si vous acceptez un rendez-vous long, le créneau suivant se décale automatiquement pour vos clients.</span>';
+  sub.appendChild(note);
   const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '18px'; save.textContent = '💾 Enregistrer mes disponibilités';
-  save.onclick = async () => {
-    save.disabled = true; save.textContent = '⏳ Enregistrement…';
-    RDV_JOURS.forEach(([k]) => { av.weekly[k] = DISPO_FIXED.filter((t) => state[k][t]); }); // écrit le nouveau format
-    try {
-      const r = await api('/api/availability', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(av) });
-      if (!r.ok) throw new Error();
-      toast('✓ Disponibilités enregistrées.');
-    } catch (e) { toast('⚠ Échec de l\'enregistrement.', true); }
-    save.disabled = false; save.textContent = '💾 Enregistrer mes disponibilités';
-  };
-  panel.appendChild(save);
+  save.onclick = () => { av.weekly = g.getConfig(); dispoSave(av, 'Disponibilités enregistrées.', save); };
+  sub.appendChild(save);
+}
+
+function renderDispoSpecific(sub, av) {
+  sub.innerHTML = '';
+  const help = document.createElement('p'); help.className = 'sec-intro';
+  help.innerHTML = '<strong>Personnalisez UNE semaine précise</strong> — par exemple ouvrir un créneau exceptionnel ou fermer une journée. Le reste de l\'année garde vos horaires habituels.';
+  sub.appendChild(help);
+  const pickWrap = document.createElement('div'); pickWrap.className = 'wk-pick';
+  pickWrap.innerHTML = '<label class="f-label" for="wk-date">Étape 1 — Choisissez une date dans la semaine à personnaliser</label>';
+  const dateInp = document.createElement('input'); dateInp.type = 'date'; dateInp.id = 'wk-date'; dateInp.className = 'f-input';
+  pickWrap.appendChild(dateInp); sub.appendChild(pickWrap);
+  const area = document.createElement('div'); area.className = 'wk-area'; sub.appendChild(area);
+  const listWrap = document.createElement('div'); sub.appendChild(listWrap);
+
+  function emptyArea() { area.innerHTML = '<p class="wk-empty">👆 Commencez par choisir une date ci-dessus : la semaine correspondante s\'ouvrira ici.</p>'; }
+  function renderList() {
+    const keys = Object.keys(av.weekOverrides || {}).sort();
+    listWrap.innerHTML = '';
+    if (!keys.length) return;
+    const t = document.createElement('div'); t.className = 'wk-list-title'; t.textContent = 'Semaines déjà personnalisées :'; listWrap.appendChild(t);
+    const box = document.createElement('div'); box.className = 'wk-chips';
+    keys.forEach((mon) => {
+      const chip = document.createElement('div'); chip.className = 'wk-chip';
+      const open = document.createElement('button'); open.className = 'wk-chip-open'; open.textContent = dispoWeekLabel(mon); open.onclick = () => { dateInp.value = mon; openWeek(mon); };
+      const del = document.createElement('button'); del.className = 'wk-chip-del'; del.textContent = '🗑'; del.title = 'Revenir aux horaires habituels';
+      del.onclick = () => { if (confirm('Revenir aux horaires habituels pour « ' + dispoWeekLabel(mon) + ' » ?')) { delete av.weekOverrides[mon]; dispoSave(av, 'Semaine réinitialisée.', del); emptyArea(); renderList(); } };
+      chip.append(open, del); box.appendChild(chip);
+    });
+    listWrap.appendChild(box);
+  }
+  function openWeek(mon) {
+    area.innerHTML = '';
+    const title = document.createElement('div'); title.className = 'wk-selected';
+    title.innerHTML = '<span class="wk-selected-lbl">Semaine sélectionnée</span><strong>' + esc(dispoWeekLabel(mon)) + '</strong>';
+    area.appendChild(title);
+    const exists = !!(av.weekOverrides && av.weekOverrides[mon]);
+    const hint = document.createElement('p'); hint.className = 'wk-hint';
+    hint.textContent = exists ? 'Cette semaine est déjà personnalisée. Ajustez les créneaux puis enregistrez.' : 'Étape 2 — Cette semaine part de vos horaires habituels. Ajoutez ou retirez des créneaux : ils ne concerneront QUE cette semaine.';
+    area.appendChild(hint);
+    const g = dispoBuildGrid(area, dispoWeekToByDay(exists ? av.weekOverrides[mon] : av.weekly));
+    const save = document.createElement('button'); save.className = 'btn-save'; save.style.marginTop = '16px'; save.textContent = '💾 Enregistrer cette semaine';
+    save.onclick = () => { av.weekOverrides[mon] = g.getConfig(); dispoSave(av, 'Semaine personnalisée enregistrée.', save); renderList(); };
+    area.appendChild(save);
+    if (exists) {
+      const del = document.createElement('button'); del.className = 'btn-del-wk'; del.textContent = '↩︎ Revenir aux horaires habituels pour cette semaine';
+      del.onclick = () => { delete av.weekOverrides[mon]; dispoSave(av, 'Semaine réinitialisée.', del); emptyArea(); renderList(); };
+      area.appendChild(del);
+    }
+  }
+  dateInp.onchange = () => { if (dateInp.value) openWeek(dispoMonday(dateInp.value)); };
+  emptyArea(); renderList();
 }
 
 function renderDem(panel, list) {
