@@ -345,6 +345,7 @@ app.post('/api/bookings/:id', requireAuth, async (req, res) => {
     if (typeof u.email === 'string') b0.email = u.email.trim().slice(0, 120);
     if (typeof u.prestation === 'string') b0.prestation = u.prestation.slice(0, 120);
     if (typeof u.motif === 'string') b0.motif = u.motif.slice(0, 500);
+    if ((nd !== b0.date || nt !== b0.time) && b0.status !== 'cancelled') b0.reminderSent = false; // RDV déplacé -> nouveau rappel J-2
     b0.date = nd; b0.time = nt; b0.durationMin = ndur;
     return writeJson(BOOK_FILE, books, (e) => {
       if (e) return res.status(500).json({ error: 'Échec.' });
@@ -355,7 +356,9 @@ app.post('/api/bookings/:id', requireAuth, async (req, res) => {
       res.json({ ok: true, booking: b });
     });
   }
+  const prevStatus = books[i].status;
   if (u.status && ['pending', 'confirmed', 'refused', 'cancelled'].indexOf(u.status) >= 0) books[i].status = u.status;
+  if (books[i].status === 'confirmed' && prevStatus !== 'confirmed') books[i].reminderSent = false; // (re)confirmé -> rappel à prévoir
   if (u.durationMin) books[i].durationMin = Math.max(15, parseInt(u.durationMin, 10));
   if (typeof u.sendReminder === 'boolean') books[i].sendReminder = u.sendReminder;
   if (books[i].status === 'cancelled') { books[i].reminderSent = true; books[i].sendReminder = false; }
@@ -479,13 +482,16 @@ app.post('/r/:token', (req, res) => {
   res.send(rdvPage("C'est fait", '<h1>' + (ok ? '✅ Rendez-vous confirmé' : '❌ Rendez-vous refusé') + '</h1><p>' + (ok ? 'Le client va recevoir un SMS de confirmation.' : 'Le client va être prévenu par SMS.') + '</p>'));
 });
 
-// Rappels J-2 (vérifié toutes les heures)
+// Rappels J-2 (vérifié toutes les heures, envoyés en journée à partir de 10h)
 function checkReminders() {
+  if (parisParts(new Date()).minutes < 10 * 60) return; // pas de SMS en pleine nuit
   const books = readJson(BOOK_FILE, []);
   const tpl = smsTemplates();
   const target = parisParts(new Date(Date.now() + 2 * 86400000)).date;
   let changed = false;
   books.forEach((b) => {
+    // Un rappel ne peut pas déjà être parti pour un RDV à plus de 2 jours : marqueur hérité d'un ancien créneau -> on le réarme.
+    if (b.status === 'confirmed' && b.reminderSent && b.date > target) { b.reminderSent = false; changed = true; }
     if (b.status === 'confirmed' && b.date === target && !b.reminderSent && b.sendReminder !== false) {
       sendSms(b.phone, fillTpl(tpl.reminder, b));
       b.reminderSent = true; changed = true;
