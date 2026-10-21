@@ -160,6 +160,9 @@ function writeJson(file, obj, cb) {
 function hm(t) { const p = String(t).split(':'); return (+p[0]) * 60 + (+p[1]); }
 function pad(min) { const h = Math.floor(min / 60), m = min % 60; return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
 function overlap(a1, a2, b1, b2) { return a1 < b2 && b1 < a2; }
+// Temps bloqué par un RDV. Une demande pas encore validée bloque la durée max d'une séance (Laetitia fixe la vraie durée en confirmant).
+const MAX_RDV_MIN = 90;
+function blockMin(x, fb) { return x.status === 'pending' ? Math.max(MAX_RDV_MIN, x.durationMin || 0) : (x.durationMin || fb); }
 function parisParts(d) {
   const f = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
   const p = {}; f.formatToParts(d).forEach((x) => { if (x.type !== 'literal') p[x.type] = x.value; });
@@ -244,7 +247,8 @@ app.get('/api/slots', async (req, res) => {
     });
   }
   const out = [];
-  const FIXED = [570, 660, 750, 840, 930, 1020, 1110]; // créneaux toutes les 1h30 : 09:30,11:00,12:30,14:00,15:30,17:00,18:30
+  // Heures cochables : toutes les 1h30 (09:30,11:00,12:30,14:00,15:30,17:00,18:30) + 13:00,14:30,16:00 (grille du samedi)
+  const FIXED = [570, 660, 750, 780, 840, 870, 930, 960, 1020, 1110];
   let cur = fromDate, guard = 0;
   while (cur <= toDate && guard < 400) {
     const ds = cur; cur = nextDate(cur); guard++;
@@ -262,16 +266,18 @@ app.get('/api/slots', async (req, res) => {
       selMin = FIXED.filter((t) => wins.some((w) => w.s <= t && t < w.e));
     }
     if (!selMin.length) continue;
-    const bkDay = taken.filter((b) => b.date === ds).map((b) => ({ s: hm(b.time), e: hm(b.time) + (b.durationMin || dur) }));
+    const bkDay = taken.filter((b) => b.date === ds).map((b) => ({ s: hm(b.time), e: hm(b.time) + blockMin(b, dur) }));
     // Décalage « RDV long » généralisé (cascade) : on parcourt les créneaux cochés dans l'ordre ; si un RDV occupe
     // un créneau et déborde sur le suivant, ce suivant est proposé à l'heure de fin du RDV (ex. RDV 2h à 15h30 -> 17h00 devient 17h30).
+    // Seuls les créneaux situés à 1h30 ou plus du début du RDV sont décalés ; un créneau plus proche (grille du samedi :
+    // 15h30 / 16h00) est une alternative au RDV pris -> il est fermé, pas décalé.
     const cands = [];
-    let floor = -1;
+    let floor = -1, from = -1;
     selMin.slice().sort((a, b) => a - b).forEach((t0) => {
-      const t = t0 < floor ? floor : t0;
+      const t = t0 < floor && t0 >= from ? floor : t0;
       cands.push(t);
       const bk = bkDay.find((b) => b.s === t0 || b.s === t);
-      if (bk) floor = Math.max(floor, bk.e);
+      if (bk && bk.e > floor) { floor = bk.e; from = bk.s + MAX_RDV_MIN; }
     });
     const slots = [];
     cands.sort((a, b) => a - b).forEach((t) => {
@@ -297,7 +303,7 @@ app.post('/api/booking', (req, res) => {
   const av = readJson(AVAIL_FILE, DEFAULT_AVAIL);
   const dur = Math.max(15, parseInt(b.duration, 10) || av.defaultDuration || 60);
   const books = readJson(BOOK_FILE, []);
-  const clash = books.some((x) => (x.status === 'pending' || x.status === 'confirmed') && x.date === date && overlap(hm(x.time), hm(x.time) + (x.durationMin || dur), hm(time), hm(time) + dur));
+  const clash = books.some((x) => (x.status === 'pending' || x.status === 'confirmed') && x.date === date && overlap(hm(x.time), hm(x.time) + blockMin(x, dur), hm(time), hm(time) + dur));
   if (clash) return res.status(409).json({ error: "Ce créneau vient d'être pris, merci d'en choisir un autre." });
   let firstname = String(b.firstname || '').trim(), lastname = String(b.lastname || '').trim();
   if (!firstname && name) { const _p = name.split(/\s+/); firstname = _p.shift() || ''; if (!lastname) lastname = _p.join(' '); }
@@ -335,7 +341,7 @@ app.post('/api/bookings/:id', requireAuth, async (req, res) => {
     const nd = String(u.date || b0.date), nt = String(u.time || b0.time);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nd) || !/^\d{2}:\d{2}$/.test(nt)) return res.status(400).json({ error: 'Date ou heure invalide.' });
     const ndur = u.durationMin ? Math.max(15, parseInt(u.durationMin, 10)) : (b0.durationMin || 60);
-    const clash = books.some((x, j) => j !== i && (x.status === 'pending' || x.status === 'confirmed') && x.date === nd && overlap(hm(x.time), hm(x.time) + (x.durationMin || ndur), hm(nt), hm(nt) + ndur));
+    const clash = books.some((x, j) => j !== i && (x.status === 'pending' || x.status === 'confirmed') && x.date === nd && overlap(hm(x.time), hm(x.time) + blockMin(x, ndur), hm(nt), hm(nt) + ndur));
     if (clash) return res.status(409).json({ error: "Ce créneau est déjà pris par un autre rendez-vous. Choisissez une autre date ou une autre heure." });
     if (await googleConflict(nd, nt, ndur, b0.gcalId)) return res.status(409).json({ error: "Ce créneau est occupé dans votre agenda Google (congés ou autre événement). Choisissez un autre moment." });
     if (typeof u.firstname === 'string') b0.firstname = u.firstname.trim().slice(0, 60);
@@ -600,7 +606,7 @@ app.post('/api/rdv-create', requireAuth, async (req, res) => {
   const av = readJson(AVAIL_FILE, DEFAULT_AVAIL);
   const dur = Math.max(15, parseInt(b.duration, 10) || av.defaultDuration || 60);
   const books = readJson(BOOK_FILE, []);
-  const clash = books.some((x) => (x.status === 'pending' || x.status === 'confirmed') && x.date === date && overlap(hm(x.time), hm(x.time) + (x.durationMin || dur), hm(time), hm(time) + dur));
+  const clash = books.some((x) => (x.status === 'pending' || x.status === 'confirmed') && x.date === date && overlap(hm(x.time), hm(x.time) + blockMin(x, dur), hm(time), hm(time) + dur));
   if (clash) return res.status(409).json({ error: "Ce créneau est déjà occupé, choisissez-en un autre." });
   if (await googleConflict(date, time, dur, null)) return res.status(409).json({ error: "Ce créneau est occupé dans votre agenda Google (congés ou autre événement). Choisissez un autre moment." });
   const rec = {

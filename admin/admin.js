@@ -554,7 +554,10 @@ function renderRdv(c) {
   renderCreate(panel); // « Nouveau RDV » affiché en premier
 }
 
-const DISPO_FIXED = ['09:30', '11:00', '12:30', '14:00', '15:30', '17:00', '18:30']; // Matin(0-2) · Après-midi(3-4) · Soir(5-6)
+const DISPO_FIXED = ['09:30', '11:00', '12:30', '14:00', '15:30', '17:00', '18:30']; // heures proposées tous les jours
+const DISPO_EXTRA = { '6': ['13:00', '14:30', '16:00'] }; // heures en plus, propres à un jour (6 = samedi)
+function dispoTimes(k) { return DISPO_FIXED.concat(DISPO_EXTRA[k] || []).sort(); }
+function dispoGroup(t) { return t < '13:00' ? 0 : t < '17:00' ? 1 : 2; } // Matin · Après-midi · Soir
 function dispoMin(t) { const p = String(t).split(':'); return (+p[0]) * 60 + (+p[1]); }
 // Config d'une semaine (nouveau format tableau OU ancien {start,end}) -> { dow: [heures] }.
 function dispoWeekToByDay(w) {
@@ -563,8 +566,8 @@ function dispoWeekToByDay(w) {
     const raw = (w && w[k]) || [];
     if (Array.isArray(raw) && raw.length && typeof raw[0] === 'object') {
       const wins = raw.map((x) => [dispoMin(x.start), dispoMin(x.end)]);
-      out[k] = DISPO_FIXED.filter((t) => { const m = dispoMin(t); return wins.some((win) => win[0] <= m && m < win[1]); });
-    } else { out[k] = Array.isArray(raw) ? raw.filter((t) => DISPO_FIXED.indexOf(t) >= 0) : []; }
+      out[k] = dispoTimes(k).filter((t) => { const m = dispoMin(t); return wins.some((win) => win[0] <= m && m < win[1]); });
+    } else { out[k] = Array.isArray(raw) ? raw.filter((t) => dispoTimes(k).indexOf(t) >= 0) : []; }
   });
   return out;
 }
@@ -576,16 +579,17 @@ function dispoWeekLabel(monday) { return 'Semaine du ' + dispoFrDate(monday, fal
 // Grille réutilisable : 7 jours × 7 créneaux (groupés Matin/Après-midi/Soir). Renvoie { getConfig() }.
 function dispoBuildGrid(container, byDay) {
   const state = {};
-  RDV_JOURS.forEach(([k]) => { state[k] = {}; (byDay[k] || []).forEach((t) => { if (DISPO_FIXED.indexOf(t) >= 0) state[k][t] = 1; }); });
+  RDV_JOURS.forEach(([k]) => { state[k] = {}; (byDay[k] || []).forEach((t) => { if (dispoTimes(k).indexOf(t) >= 0) state[k][t] = 1; }); });
   const grid = document.createElement('div'); grid.className = 'dispo-grid';
   RDV_JOURS.forEach(([k, label]) => {
     const day = document.createElement('div'); day.className = 'dispo-day';
     const lab = document.createElement('div'); lab.className = 'dispo-lab';
     function refreshLab() { const none = !Object.keys(state[k]).length; day.classList.toggle('closed', none); lab.innerHTML = '<span class="dispo-name">' + label + '</span>' + (none ? '<span class="dispo-closed">fermé</span>' : ''); }
     const pills = document.createElement('div'); pills.className = 'dispo-pills';
-    DISPO_FIXED.forEach((t, i) => {
-      if (i === 3 || i === 5) { const br = document.createElement('div'); br.className = 'pill-break'; pills.appendChild(br); } // saut de ligne mobile entre Matin/Après-midi/Soir
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'slot-pill' + (i === 3 || i === 5 ? ' pill-gap' : '');
+    dispoTimes(k).forEach((t, i, all) => {
+      const newGroup = i > 0 && dispoGroup(t) !== dispoGroup(all[i - 1]);
+      if (newGroup) { const br = document.createElement('div'); br.className = 'pill-break'; pills.appendChild(br); } // saut de ligne mobile entre Matin/Après-midi/Soir
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'slot-pill' + (newGroup ? ' pill-gap' : '');
       b.textContent = t.replace(':', 'h');
       function refresh() { const on = !!state[k][t]; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
       b.onclick = () => { if (state[k][t]) delete state[k][t]; else state[k][t] = 1; refresh(); refreshLab(); };
@@ -594,7 +598,7 @@ function dispoBuildGrid(container, byDay) {
     refreshLab(); day.append(lab, pills); grid.appendChild(day);
   });
   container.appendChild(grid);
-  return { getConfig() { const o = {}; RDV_JOURS.forEach(([k]) => { o[k] = DISPO_FIXED.filter((t) => state[k][t]); }); return o; } };
+  return { getConfig() { const o = {}; RDV_JOURS.forEach(([k]) => { o[k] = dispoTimes(k).filter((t) => state[k][t]); }); return o; } };
 }
 async function dispoSave(av, okMsg, btn) {
   const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Enregistrement…';
